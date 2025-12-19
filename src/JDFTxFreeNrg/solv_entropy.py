@@ -13,32 +13,31 @@ A3_to_liters = ((1e-10)/(0.1))**3  # Å^3 to liters
 eV_to_J = const.eV
 J_to_eV = 1 / eV_to_J
 
-def mesh_spheres_volume(
-        rs: list[float], centers: list[np.ndarray], nsteps: int = 50):
+def get_mesh_spheres_volume(
+        rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000):
     """ Returns the mesh-integrated volume of union of spheres
 
     Args:
         rs (list[float]): Radii of each sphere
         centers (list[np.ndarray]): Center of each sphere
-        nsteps (int): Grid points per dimension (nsteps^3 total grid points)
+        ncubes (int): Approximate number of cubes used in integration
 
     Returns:
         float: Mesh-integrated volume
     """
-    minx = min([c[0] - r for c, r in zip(centers, rs)]) * 1.1
-    maxx = max([c[0] + r for c, r in zip(centers, rs)]) * 1.1
-    miny = min([c[1] - r for c, r in zip(centers, rs)]) * 1.1
-    maxy = max([c[1] + r for c, r in zip(centers, rs)]) * 1.1
-    minz = min([c[2] - r for c, r in zip(centers, rs)]) * 1.1
-    maxz = max([c[2] + r for c, r in zip(centers, rs)]) * 1.1
+    minx, miny, minz = [min([c[i] - r for c, r in zip(centers, rs)]) for i in range(3)]
+    maxx, maxy, maxz = [max([c[i] + r for c, r in zip(centers, rs)]) for i in range(3)]
+    spans = [maxx - minx, maxy - miny, maxz - minz]
+    vol_tot = spans[0] * spans[1] * spans[2]
+    dstep = (vol_tot / float(ncubes)) ** (1/3)
+    nx, ny, nz = [int(np.round(sp / dstep)) for sp in spans]
+    # print(f"Using {np.prod([nx, ny, nz])} cubes for volume integration (approx {ncubes} requested)")
     x, y, z = np.meshgrid(
-        np.linspace(minx, maxx, nsteps),
-        np.linspace(miny, maxy, nsteps),
-        np.linspace(minz, maxz, nsteps),
+        np.linspace(minx, maxx, nx),
+        np.linspace(miny, maxy, ny),
+        np.linspace(minz, maxz, nz),
     )
-    x_flat = x.flatten()
-    y_flat = y.flatten()
-    z_flat = z.flatten()
+    x_flat, y_flat, z_flat = x.flatten(), y.flatten(), z.flatten()
     points = np.vstack((x_flat, y_flat, z_flat)).T
     distancess = [np.linalg.norm(points - c, axis=1) for c in centers]
     inside_any_sphere = np.zeros(len(points), dtype=bool)
@@ -46,10 +45,10 @@ def mesh_spheres_volume(
         inside_sphere = distances <= r
         inside_any_sphere = inside_any_sphere | inside_sphere
     vol = np.sum(inside_any_sphere)
-    dV = ((maxx - minx)/nsteps) * ((maxy - miny)/nsteps) * ((maxz - minz)/nsteps)
+    dV = ((maxx - minx)/nx) * ((maxy - miny)/ny) * ((maxz - minz)/nz)
     return vol * dV
 
-def monte_carlo_spheres_volume(
+def get_monte_carlo_spheres_volume(
         rs: list[float], centers: list[np.ndarray], npoints: int = 1000000) -> float:
     """ Returns the Monte-Carlo-integrated volume of union of spheres
 
@@ -75,8 +74,18 @@ def monte_carlo_spheres_volume(
         if inside_any_sphere:
             count_inside += 1
     cube_volume = np.prod(max_coords - min_coords)
-    spheres_volume = (count_inside / npoints) * cube_volume
-    return spheres_volume
+    count_mean = count_inside / npoints
+    spheres_volume = (count_mean) * cube_volume
+    stdev = np.sqrt(
+        (
+            count_inside * ((cube_volume - spheres_volume)**2) + 
+            (npoints - count_inside) * ((spheres_volume)**2)
+            # count_inside * ((1 - count_mean)**2) + 
+            # (npoints - count_inside) * ((count_mean)**2)
+        ) / npoints
+    )
+    sem = stdev / np.sqrt(npoints)
+    return spheres_volume, sem
 
 def get_vdw_volume(structure: Structure, npoints: int = 1000000) -> float:
     """ Returns the van der waals volume of a structure 
@@ -90,7 +99,7 @@ def get_vdw_volume(structure: Structure, npoints: int = 1000000) -> float:
     """
     rs = [site.specie.van_der_waals_radius for site in structure.sites]
     centers = [site.coords for site in structure.sites]
-    vol = monte_carlo_spheres_volume(rs, centers, npoints=npoints)
+    vol, _ = get_monte_carlo_spheres_volume(rs, centers, npoints=npoints)
     return vol
 
 
