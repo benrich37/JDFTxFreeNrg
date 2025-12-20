@@ -76,12 +76,12 @@ def get_monte_carlo_spheres_volume(
     cube_volume = np.prod(max_coords - min_coords)
     count_mean = count_inside / npoints
     spheres_volume = (count_mean) * cube_volume
+    # Since the results of this simulation is binary, we can make the evaluation
+    # of the variance much quicker.
     stdev = np.sqrt(
         (
             count_inside * ((cube_volume - spheres_volume)**2) + 
             (npoints - count_inside) * ((spheres_volume)**2)
-            # count_inside * ((1 - count_mean)**2) + 
-            # (npoints - count_inside) * ((count_mean)**2)
         ) / npoints
     )
     sem = stdev / np.sqrt(npoints)
