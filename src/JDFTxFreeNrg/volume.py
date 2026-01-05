@@ -1,14 +1,14 @@
 import numpy as np
-import pyvista as pv
 from pymatgen.core import Structure
 from pymatgen.io.jdftx.inputs import JDFTXInfile
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from pathlib import Path
 import json
-from pyvolgrid import volume_from_spheres
+
 
 def get_pyvol_spheres_volume(
         rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000, grid_spacing: float | None = None) -> float:
+    from pyvolgrid import volume_from_spheres
     minx, miny, minz = [min([c[i] - r for c, r in zip(centers, rs)]) for i in range(3)]
     maxx, maxy, maxz = [max([c[i] + r for c, r in zip(centers, rs)]) for i in range(3)]
     spans = [maxx - minx, maxy - miny, maxz - minz]
@@ -32,6 +32,7 @@ def get_pyvista_spheres_volume(
     Returns:
         float: Mesh-integrated volume
     """
+    import pyvista as pv
     # dangle = int(nslices/((len(rs)) * 2))
     dangle = max(int(nslices/(2)), 10)
     print(f"Using {dangle} theta/phi resolution for PyVista {len(rs)} spheres")
