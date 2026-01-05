@@ -122,11 +122,11 @@ def get_vdw_volume(structure: Structure, npoints: int = 1000000, grid_spacing: f
     """
     rs = [site.specie.van_der_waals_radius for site in structure.sites]
     centers = [site.coords for site in structure.sites]
-    if method == "MC":
+    if method.lower() == "mc":
         vol, _ = get_monte_carlo_spheres_volume(rs, centers, npoints=npoints)
-    elif method == "Mesh":
+    elif method.lower() == "mesh":
         vol = get_mesh_spheres_volume(rs, centers, ncubes=npoints, grid_spacing=grid_spacing)
-    elif method == "PyVol":
+    elif method.lower() == "pyvol":
         vol = get_pyvol_spheres_volume(rs, centers, ncubes=npoints, grid_spacing=grid_spacing)
     else:
         raise ValueError(f"Unknown method {method} for vdw volume calculation (choose 'MC', 'Mesh', or 'PyVol')")
@@ -195,31 +195,63 @@ class StructureVolume(Structure):
         idcs = sorted(idcs)
         idx_key = "_".join([str(i) for i in idcs])
         return idx_key
+    
+    def get_npoints_key(self, npoints: int) -> str:
+        return f"n: {npoints}"
+    
+    def get_grid_spacing_key(self, grid_spacing: float) -> str:
+        return f"gs: {grid_spacing:.6f}"
+    
+    def parse_npoints_key(self, npoints_key: str) -> int:
+        return int(npoints_key.split(":")[1].strip())
+    
+    def parse_grid_spacing_key(self, grid_spacing_key: str) -> float:
+        return float(grid_spacing_key.split(":")[1].strip())
+    
+    def is_npoints_key(self, key: str) -> bool:
+        return key.startswith("n:")
+    
+    def is_grid_spacing_key(self, key: str) -> bool:
+        return key.startswith("gs:")
 
-    def compute_volume(self, idcs: list[int], npoints: int = 1000000) -> float:
+    def compute_volume(self, idcs: list[int], npoints: int | None = None, grid_spacing: float | None = None,) -> float:
         idcs = sorted(idcs)
         substructure = Structure.from_sites(
             [self[i] for i in range(len(self.sites)) if i in idcs])
-        vol = get_vdw_volume(substructure, npoints=npoints)
+        vol = get_vdw_volume(substructure, npoints=npoints, method=self.method, grid_spacing=grid_spacing)
         if self.cache is not None:
             if self.method not in self.cache:
                 self.cache[self.method] = {}
             idx_key = self.get_idcs_key(idcs)
             if idx_key not in self.cache[self.method]:
                 self.cache[self.method][idx_key] = {}
-            self.cache[self.method][idx_key][str(npoints)] = vol
+            self.cache[self.method][idx_key][self.get_npoints_key(npoints)] = vol
             self.backup_cache()
         return vol
 
-    def get_volume(self, idcs: list[int] | None = None) -> float:
+    def get_volume(self, idcs: list[int] | None = None, npoints: int | None = None, grid_spacing: float | None = None, by_grid_spacing: bool = False) -> float:
+        if npoints is not None:
+            npoints = int(npoints)
         if idcs is None:
             idcs = list(range(len(self.sites)))
         idcs = sorted(idcs)
         if self.cache is not None:
+            if self.method not in self.cache:
+                self.cache[self.method] = {}
             idx_key = self.get_idcs_key(idcs)
             if idx_key in self.cache[self.method]:
-                npoints_keys = [int(k) for k in self.cache[idx_key].keys()]
-                max_npoints = max(npoints_keys)
-                return self.cache[self.method][idx_key][str(max_npoints)]
-        vol = self.compute_volume(idcs)
+                if npoints is None:
+                    npoints_keys = [k for k in self.cache[self.method][idx_key].keys() if self.is_npoints_key(k)]
+                    npointss = [self.parse_npoints_key(k) for k in npoints_keys]
+                    max_npoints = max(npointss)
+                    return self.cache[self.method][idx_key][self.get_npoints_key(max_npoints)]
+                    # grid_spacing_keys = [k for k in self.cache[self.method][idx_key].keys() if self.is_grid_spacing_key(k)]
+                    # npoints_keys = [int(k) for k in self.cache[self.method][idx_key].keys()]
+                    # max_npoints = max(npoints_keys)
+                    # return self.cache[self.method][idx_key][str(max_npoints)]
+                elif self.get_npoints_key(npoints) in self.cache[self.method][idx_key]:
+                    return self.cache[self.method][idx_key][self.get_npoints_key(npoints)]
+        if npoints is None:
+            npoints = 1000000
+        vol = self.compute_volume(idcs, npoints=npoints, grid_spacing=grid_spacing)
         return vol

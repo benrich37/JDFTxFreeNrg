@@ -6,6 +6,8 @@ import math
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 
 freq_to_vt = 100 * const.speed_of_light * const.Planck / const.k
+eV_to_J = const.eV
+J_to_eV = 1 / eV_to_J
 
 
 def get_avg_mom_inertia(structure: Structure):
@@ -84,7 +86,7 @@ def get_q_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
     )**(d/2)
 
 def get_entropy_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
-    """Returns the translational entropy in J/K.
+    """Returns the translational entropy in eV/K.
 
     Args:
         mass (float): Mass in amu
@@ -93,24 +95,24 @@ def get_entropy_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
         d (int): dimensionality of free translations
 
     Returns: 
-        float: Entropy in J/K
+        float: Entropy in eV/K
 
     Note - this includes the +k term in the Sackur-Tetrode equation, so if you are adding
     in entropies from other sources, you may need to subtract that out.
     """
     q = get_q_trans(mass, T, vol, d=d)
-    return const.k * (np.log(q) + 5/2)
+    return const.k * (np.log(q) + 5/2) * J_to_eV
 
 def get_enthalpy_trans(T: float, d=3):
-    """ Returns the translational enthalpy in J.
+    """ Returns the translational enthalpy in eV.
     Args:
         T (float): Temperature in K
         d (int): dimensionality of free translations
 
     Returns: 
-        float: Enthalpy in J
+        float: Enthalpy in eV
     """
-    return (d/2) * const.k * T
+    return (d/2) * const.k * T * J_to_eV
 
 """
 ROT
@@ -143,35 +145,35 @@ def get_q_rot(structure: Structure, T: float = 300.0, linear: bool | None = None
     return qr
 
 def _get_entropy_rot(qr: float, linear: bool = False) -> float:
-    """Return the rotational entropy in J/K.
+    """Return the rotational entropy in eV/K.
 
     Args:
         qr (float): Rotational partition function (unitless)
         linear (bool): Whether the molecule is linear
 
     Returns: 
-        float: Entropy in J/K
+        float: Entropy in eV/K
     """
-    return const.k * (np.log(qr) + 1 + 0.5*(not linear))
+    return const.k * (np.log(qr) + 1 + 0.5*(not linear)) * J_to_eV
 
 
 def get_entropy_rot(structure: Structure,  T: float):
-    """ Return the rotational entropy in J/K.
+    """ Return the rotational entropy in eV/K.
 
     Args:
         structure (Structure): pymatgen Structure (for getting moments of inertia and checking linearity and symmetry)
         T (float): temperature in K
 
     Returns:
-        float: Entropy in J/K
+        float: Entropy in eV/K
     """
     qr = get_q_rot(structure, T)
-    return _get_entropy_rot(qr, linear = check_is_linear(structure))
+    return _get_entropy_rot(qr, linear = check_is_linear(structure)) * J_to_eV
 
 
 
 def get_enthalpy_rot(structure: Structure,  T: float, d: int = 3):
-    """ Return the rotational enthalpy in J.
+    """ Return the rotational enthalpy in eV.
 
     Args:
         structure (Structure): pymatgen Structure (for checking linearity)
@@ -179,11 +181,11 @@ def get_enthalpy_rot(structure: Structure,  T: float, d: int = 3):
         d (int): dimensionality of free rotations
 
     Returns:
-        float: Enthalpy in J
+        float: Enthalpy in eV
     """
     if check_is_linear(structure):
         d = min(2, d)
-    return (d/2) * const.k * T
+    return (d/2) * const.k * T * J_to_eV
 
 """
 VIB
@@ -204,17 +206,17 @@ def __get_ho_vib_enthalpies(vt_over_T: float | np.ndarray, T: float) -> float:
         )
 
 def get_enthalpy_vib(freq: float | np.ndarray, T: float) -> float:
-    """ Return the HO vibrational enthalpy in J.
+    """ Return the HO vibrational enthalpy in eV.
 
     Args:
         freq (float): Vibrational frequency in cm^-1
         T (float): temperature in K
 
     Returns:
-        float: enthalpy in J
+        float: enthalpy in eV
     """
     vt_over_T = freq * freq_to_vt / T
-    return __get_ho_vib_enthalpies(vt_over_T, T) * const.k
+    return __get_ho_vib_enthalpies(vt_over_T, T) * const.k * J_to_eV
 
 
 def _get_ho_vib_entropies(vt_over_t: float | np.ndarray) -> float:
@@ -228,14 +230,14 @@ def _get_ho_vib_entropies(vt_over_t: float | np.ndarray) -> float:
     return vt_over_t / ((np.exp(vt_over_t) - 1)) - np.log(1 - np.exp(-vt_over_t))
 
 def get_entropy_vib(freq: float | np.ndarray, T: float) -> float:
-    """ Return the HO vibrational entropy in J/K.
+    """ Return the HO vibrational entropy in eV/K.
 
     Args:
         freq (float): Vibrational temperature
         T (float): temperature in K
 
     Returns:
-        float: entropy in J/K
+        float: entropy in eV/K
     """
     vt_over_t = freq * freq_to_vt / T
-    return _get_ho_vib_entropies(vt_over_t) * const.k
+    return _get_ho_vib_entropies(vt_over_t) * const.k * J_to_eV

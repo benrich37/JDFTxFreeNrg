@@ -203,7 +203,7 @@ def get_solv_entropy_rot(
     rf = (3*vf/(4*np.pi))**(1/3)
     S_rot = get_entropy_conditionally_restricted_rotor(structure, rg, rf, rm, T)
     S_rot += get_entropy_change_tr_from_rotation(structure, vm, vf, T)
-    return S_rot * J_to_eV
+    return S_rot
 
 def get_solv_entropy_trans(
         structure: Structure, vm: float, vs: float, vf: float, T: float, d: int = 3
@@ -227,7 +227,7 @@ def get_solv_entropy_trans(
 def _get_solv_entropy_trans(
         mass, T, veff, d
     ) -> float:
-    return get_entropy_trans(mass, T, veff, d=d) * J_to_eV
+    return get_entropy_trans(mass, T, veff, d=d)
 
 def get_standard_state_correction(T: float, P: float = 101325, M: float = 1) -> float:
     """ Returns standard state correction for entropy from 1 mol/L to ideal gas at given P and T
