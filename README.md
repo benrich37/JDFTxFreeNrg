@@ -7,7 +7,6 @@ Includes implementation of the quasi-rigid rotor harmonic oscillator (QRRHO) app
 Implementation of equations 2-12, 45 and 46 from Solvation Entropy Made Simple (Garza 2019). 
 This includes a suitable term for volume in the translational entropy given by an effective cavity volume, adjustments to the translational entropy arising from the loss of free space from a species' rotation, and a special case adjustment to the rotational partition function for a restricted rotor.
 This also includes a `StructureVolume(Structure)` class, which uses Monte Carlo integration for estimating Van der Waals structure volumes needed for these entropies.
-The analytical equation for the union volume of two spheres from Van der Waals Volumes and Radii (Bondi 1963) is also implemented in the testing directory for benchmarking Monte Carlo volumes.
 
 ## Vibrational Entropies
 
