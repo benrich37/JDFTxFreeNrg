@@ -39,12 +39,19 @@ def anl_sphere_volume(r: float) -> float:
     return (4/3) * np.pi * r**3
 
 def anl_2sphere_intersection_volume(r1: float, r2: float, l: float):
+    if l >= r1 + r2:
+        return 0.0
     # Break down the distance between centers into four parts:
     ## l = A + B + C + D
     ## A = distance from center 1 to closest point on sphere 2 (= l - r2)
     ## B = cap height for cap from sphere 2
     ## C = cap height for cap from sphere 1
     ## D = distance from center 2 to closest point on sphere 1 (= l - r1)
+    # In the case where the smaller sphere is completely inside the larger sphere, this equation doesn't work
+    # and the intersection is just the vol of the smaller sphere
+    r1, r2 = max(r1, r2), min(r1, r2)
+    if l + r2 <= r1:
+        return anl_sphere_volume(r2)
     # We can solve A + B = m, as m being the distance from first sphere where the two laguerre powers are equal,
     # which equates to solving x**2 - r1**2 = (x-l)**2 - r2**2, giving x = ((r1**2) - (r2**2) + (l**2))/(2*l).
     m = ((r1**2) - (r2**2) + (l**2))/(2*l)
@@ -373,14 +380,15 @@ def plot_volume_accuracy(
         time_numerics: dict[str, list[float]],
         dev_numerics: dict[str, list[float]] = None,
         colors: dict[str, str] = None,
-        standalone_vol_label: str | None = None,
+        standalone_vol_labels: list[str] | None = None,
+        computed_label: str = 'Computed volume'
         ):
     if colors is None:
         colors = {label: color for label, color in zip(labels, ['red', 'blue', 'orange', 'purple', 'cyan'])}
     if dev_numerics is None:
         dev_numerics = {}
     err_numerics = {label: np.array([((v - vol_true) / vol_true) for v in vol_numerics[label]])*100 for label in labels}
-    fig, ax = plt.subplots(nrows=2 if standalone_vol_label is None else 3, sharex=True)
+    fig, ax = plt.subplots(nrows=2 if standalone_vol_labels is None else 3, sharex=True)
     ax[0].axhline(y=0.0, color='green')
     for label in labels:
         ax[0].plot(time_numerics[label], err_numerics[label], marker='o', label=label, color=colors[label])
@@ -396,19 +404,20 @@ def plot_volume_accuracy(
             ax[1].plot(time_numerics[label], vol_numerics[label], marker='o', label=label, color=colors[label])
     ax[1].axhline(y=vol_true, color='green', linestyle='--', label='Analytical')
     ax[1].set_xlabel('Time (s)')
-    ax[1].set_ylabel('Computed volume')
+    ax[1].set_ylabel(computed_label)
     ax[1].legend()
-    if standalone_vol_label is not None:
-        label = standalone_vol_label
-        if label in dev_numerics:
-            ax[2].scatter(time_numerics[label], vol_numerics[label], marker='o', label=label, color=colors[label])
-            ax[2].errorbar(time_numerics[label], vol_numerics[label], yerr=dev_numerics[label], color=colors[label], fmt='o')
-            ax[2].plot(time_numerics[label], vol_numerics[label], color=colors[label], zorder=3)
-        else:
-            ax[2].plot(time_numerics[label], vol_numerics[label], marker='o', label=label, color=colors[label])
+    if standalone_vol_labels is not None:
+        for label in standalone_vol_labels:
+            assert label in labels, f"Standalone volume label '{label}' not found in labels."
+            if label in dev_numerics:
+                ax[2].scatter(time_numerics[label], vol_numerics[label], marker='o', label=label, color=colors[label])
+                ax[2].errorbar(time_numerics[label], vol_numerics[label], yerr=dev_numerics[label], color=colors[label], fmt='o')
+                ax[2].plot(time_numerics[label], vol_numerics[label], color=colors[label], zorder=3)
+            else:
+                ax[2].plot(time_numerics[label], vol_numerics[label], marker='o', label=label, color=colors[label])
         ax[2].axhline(y=vol_true, color='green', linestyle='--', label='Analytical')
         ax[2].set_xlabel('Time (s)')
-        ax[2].set_ylabel('Computed volume')
+        ax[2].set_ylabel(computed_label)
         ax[2].legend()
         ax[2].ticklabel_format(useOffset=False)
     # plt.show()
@@ -440,7 +449,10 @@ def ensure_random_spheres(rs: list[float] | None = None, centers: list[np.ndarra
 def test_generic(
         rss: list[list[float]], centerss: list[list[np.ndarray]], nsampless: list[int], 
         treat_func: callable, err_func: callable,
-        mesh_sample_scale: float = 150., pyvol_sample_scale = 3000.):
+        mesh_sample_scale: float = 150., pyvol_sample_scale = 3000.,
+        computed_label: str = 'Computed volume',
+        standalone_vol_labels: list[str] = ["Mesh (PyVol)"],
+        ):
     v_anl = treat_func([anl_spheres_volume(rss[i], centerss[i]) for i in range(len(rss))])
     v_mcs, t_mcs, dev_mcs = get_mc_generic_samples(
         rss,
@@ -477,7 +489,8 @@ def test_generic(
             "Mesh (PyVol)": t_pyvols,
         },
         {"Monte Carlo": dev_mcs},
-        standalone_vol_label="Mesh (PyVol)",
+        standalone_vol_labels=standalone_vol_labels,
+        computed_label=computed_label,
         )
     return fig, ax
 
@@ -501,6 +514,7 @@ def test_single_sphere_volume(r: float | None = None, center: np.ndarray | None 
         pyvol_sample_scale,
     )
     fig.suptitle('Single Sphere of r={:.2f} Volume Accuracy'.format(r))
+    fig.tight_layout()
     plt.show()
 
 def test_double_sphere_volume(rs: list[float] | None = None, centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 0.5, pyvol_sample_scale = 3000.):
@@ -521,6 +535,7 @@ def test_double_sphere_volume(rs: list[float] | None = None, centers: list[np.nd
         pyvol_sample_scale,
     )
     fig.suptitle('Double Sphere of r1={:.2f}, r2={:.2f}, d={:.2f} Volume Accuracy'.format(rs[0], rs[1], np.linalg.norm(centers[0]-centers[1])))
+    fig.tight_layout()
     plt.show()
 
 def test_vcav(solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, solute_rs: list[float] | None = None, solute_centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 0.5, pyvol_sample_scale = 3000., na_solute: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0):
@@ -595,7 +610,7 @@ def test_solve_entropy_trans(
         v_solute = vs[1]
         vfree = avg_volume_per_molecule - v_solv
         veff = eff_volume(v_solute, v_solv, vfree)
-        solv_entr_trans = _get_solv_entropy_trans(m_solute, T, veff, d=3)
+        solv_entr_trans = _get_solv_entropy_trans(m_solute, T, veff, d=3) * T
         return solv_entr_trans
     def err_func(uncs: list[float]) -> float:
         return np.nan
@@ -607,6 +622,49 @@ def test_solve_entropy_trans(
         err_func,
         mesh_sample_scale,
         pyvol_sample_scale,
+        computed_label = "Computed T*S\n(eV)"
+    )
+    plt.show()
+
+
+def test_relative_solve_entropy_trans(
+        solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, 
+        solute_rs1: list[float] | None = None, solute_centers1: list[np.ndarray] | None = None, 
+        solute_rs2: list[float] | None = None, solute_centers2: list[np.ndarray] | None = None, 
+        nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvol_sample_scale = 5000., 
+        na_solute1: int = 2, na_solute2: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0, T: float = 300., m_solute: float = 18.0,
+        standalone_vol_labels: list[str] = ["Mesh (PyVol)", "Mesh"]
+        ):
+    solvent_rs, solvent_centers = ensure_random_spheres(solvent_rs, solvent_centers, num_spheres=na_solvent)
+    solute_rs1, solute_centers1 = ensure_random_spheres(solute_rs1, solute_centers1, num_spheres=na_solute1)
+    solute_rs2, solute_centers2 = ensure_random_spheres(solute_rs2, solute_centers2, num_spheres=na_solute2)
+    # Solvent molecules with greater free space will have errors effectively muted out
+    # Scale needs to be >1 to ensure positive free volume
+    avg_volume_per_molecule = anl_spheres_volume(solvent_rs, solvent_centers) * scale_free_volume
+    if nsampless is None:
+        nsampless = [1e4, 2e4, 3e4, 5e4]
+    def treat_func(vs: list[float]) -> float:
+        v_solv = vs[0]
+        v_solute1 = vs[1]
+        v_solute2 = vs[2]
+        vfree = avg_volume_per_molecule - v_solv
+        veff1 = eff_volume(v_solute1, v_solv, vfree)
+        solv_entr_trans1 = _get_solv_entropy_trans(m_solute, T, veff1, d=3)
+        veff2 = eff_volume(v_solute2, v_solv, vfree)
+        solv_entr_trans2 = _get_solv_entropy_trans(m_solute, T, veff2, d=3)
+        return (solv_entr_trans1 - solv_entr_trans2)*T
+    def err_func(uncs: list[float]) -> float:
+        return np.nan
+    fig, ax = test_generic(
+        [solvent_rs, solute_rs1, solute_rs2],
+        [solvent_centers, solute_centers1, solute_centers2],
+        nsampless,
+        treat_func,
+        err_func,
+        mesh_sample_scale,
+        pyvol_sample_scale,
+        computed_label = r"Computed T*$\Delta$S" + "\n(eV)",
+        standalone_vol_labels=standalone_vol_labels,
     )
     plt.show()
 
@@ -619,4 +677,23 @@ def test_solve_entropy_trans(
 # test_triple_sphere_volume(pyvista_sample_scale=0.38, mesh_sample_scale=120.)
 # test_vcav()
 # test_eff_volume()
-test_solve_entropy_trans()
+# test_solve_entropy_trans()
+# test_relative_solve_entropy_trans()
+
+# rs_solute1 = [0.25, 0.5]
+# centers_solute1 = [np.zeros(3), np.ones(3)*0.1]
+
+# rs_solute2 = [0.25, 0.5]
+# centers_solute2 = [np.zeros(3), np.ones(3)*0.65]
+
+# rs_solvent = [0.3]
+# centers_solvent = [np.zeros(3)]
+# test_relative_solve_entropy_trans(
+#         solvent_rs=rs_solvent, solvent_centers=centers_solvent,
+#         solute_rs1=rs_solute1, solute_centers1=centers_solute1,
+#         solute_rs2=rs_solute2, solute_centers2=centers_solute2,
+#         scale_free_volume=2.0,
+# )
+# test_double_sphere_volume(
+#     rs_solute1, centers_solute1
+# )

@@ -20,7 +20,6 @@ def get_pyvol_spheres_volume(
     return volume_from_spheres(centers, rs, grid_spacing=dstep)
     
     
-
 def get_pyvista_spheres_volume(
         rs: list[float], centers: list[np.ndarray], nslices: int = 900):
     """ Returns the mesh-integrated volume of union of spheres
@@ -110,46 +109,7 @@ def get_monte_carlo_spheres_volume(
     sem = np.std(results) / np.sqrt(npoints)
     return mean, sem
 
-# def get_monte_carlo_spheres_volume(
-#         rs: list[float], centers: list[np.ndarray], npoints: int = 1000000) -> float:
-#     """ Returns the Monte-Carlo-integrated volume of union of spheres
-
-#     Args:
-#         rs (list[float]): Radii of each sphere
-#         centers (list[np.ndarray]): Center of each sphere
-#         npoints (int): Number of samples used in integration
-
-#     Returns:
-#         float: Monte-Carlo-integrated volume
-#     """
-#     count_inside = 0
-#     min_coords = np.min([c - r for c, r in zip(centers, rs)], axis=0)
-#     max_coords = np.max([c + r for c, r in zip(centers, rs)], axis=0)
-#     for _ in range(npoints):
-#         point = np.random.uniform(min_coords, max_coords)
-#         inside_any_sphere = False
-#         for r, c in zip(rs, centers):
-#             distance = np.linalg.norm(point - c)
-#             if distance <= r:
-#                 inside_any_sphere = True
-#                 break
-#         if inside_any_sphere:
-#             count_inside += 1
-#     cube_volume = np.prod(max_coords - min_coords)
-#     count_mean = count_inside / npoints
-#     spheres_volume = (count_mean) * cube_volume
-#     # Since the results of this simulation is binary, we can make the evaluation
-#     # of the variance much quicker.
-#     stdev = np.sqrt(
-#         (
-#             count_inside * ((cube_volume - spheres_volume)**2) + 
-#             (npoints - count_inside) * ((spheres_volume)**2)
-#         ) / npoints
-#     )
-#     sem = stdev / np.sqrt(npoints)
-#     return spheres_volume, sem
-
-def get_vdw_volume(structure: Structure, npoints: int = 1000000) -> float:
+def get_vdw_volume(structure: Structure, npoints: int = 1000000, grid_spacing: float | None = None, method="MC") -> float:
     """ Returns the van der waals volume of a structure 
 
     Args:
@@ -161,7 +121,14 @@ def get_vdw_volume(structure: Structure, npoints: int = 1000000) -> float:
     """
     rs = [site.specie.van_der_waals_radius for site in structure.sites]
     centers = [site.coords for site in structure.sites]
-    vol, _ = get_monte_carlo_spheres_volume(rs, centers, npoints=npoints)
+    if method == "MC":
+        vol, _ = get_monte_carlo_spheres_volume(rs, centers, npoints=npoints)
+    elif method == "Mesh":
+        vol = get_mesh_spheres_volume(rs, centers, ncubes=npoints, grid_spacing=grid_spacing)
+    elif method == "PyVol":
+        vol = get_pyvol_spheres_volume(rs, centers, ncubes=npoints, grid_spacing=grid_spacing)
+    else:
+        raise ValueError(f"Unknown method {method} for vdw volume calculation (choose 'MC', 'Mesh', or 'PyVol')")
     return vol
 
 
@@ -169,6 +136,7 @@ class StructureVolume(Structure):
 
     cache: dict | None = None
     structure: Structure
+    method: str = "MC"
 
     def set_cache_parent(self, cache_parent: Path | None = None):
         if cache_parent is not None:
@@ -179,13 +147,14 @@ class StructureVolume(Structure):
             self.cache_dir = None
             
     @classmethod
-    def from_structure(cls, structure: Structure, cache_parent: Path | None = None):
+    def from_structure(cls, structure: Structure, cache_parent: Path | None = None, method: str = "MC"):
         struct_vol = cls.from_sites(structure.sites)
         struct_vol.set_cache_parent(cache_parent)
+        struct_vol.method = method
         return struct_vol
     
     @classmethod
-    def from_calc_dir(cls, calc_dir: Path, use_in: bool = False):
+    def from_calc_dir(cls, calc_dir: Path, use_in: bool = False, method: str = "MC"):
         infile = calc_dir / "in"
         outfile = calc_dir / "out"
         if infile.exists() and use_in:
@@ -195,6 +164,7 @@ class StructureVolume(Structure):
         # structure = JDFTXOutfile.from_file(calc_dir / "out").structure
         struct_vol = cls.from_sites(structure.sites)
         struct_vol.set_cache_parent(calc_dir)
+        struct_vol.method = method
         return struct_vol
 
     def clear_cache(self):
@@ -213,8 +183,10 @@ class StructureVolume(Structure):
             if cache_file.exists():
                 with open(cache_file, 'r') as f:
                     self.cache = json.load(f)
+                if self.method not in self.cache:
+                    self.cache[self.method] = {}
             else:
-                self.cache = {}
+                self.cache = {self.method: {}}
         else:
             self.cache = None
 
@@ -229,10 +201,12 @@ class StructureVolume(Structure):
             [self[i] for i in range(len(self.sites)) if i in idcs])
         vol = get_vdw_volume(substructure, npoints=npoints)
         if self.cache is not None:
+            if self.method not in self.cache:
+                self.cache[self.method] = {}
             idx_key = self.get_idcs_key(idcs)
-            if idx_key not in self.cache:
-                self.cache[idx_key] = {}
-            self.cache[idx_key][str(npoints)] = vol
+            if idx_key not in self.cache[self.method]:
+                self.cache[self.method][idx_key] = {}
+            self.cache[self.method][idx_key][str(npoints)] = vol
             self.backup_cache()
         return vol
 
@@ -242,9 +216,9 @@ class StructureVolume(Structure):
         idcs = sorted(idcs)
         if self.cache is not None:
             idx_key = self.get_idcs_key(idcs)
-            if idx_key in self.cache:
+            if idx_key in self.cache[self.method]:
                 npoints_keys = [int(k) for k in self.cache[idx_key].keys()]
                 max_npoints = max(npoints_keys)
-                return self.cache[idx_key][str(max_npoints)]
+                return self.cache[self.method][idx_key][str(max_npoints)]
         vol = self.compute_volume(idcs)
         return vol
