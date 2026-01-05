@@ -1,13 +1,7 @@
 import numpy as np
-# import time
-from time import time
-# from JDFTxFreeNrg.solv_entropy import get_monte_carlo_spheres_volume, get_mesh_spheres_volume, get_pyvista_spheres_volume
 from JDFTxFreeNrg.volume import get_mesh_spheres_volume, get_monte_carlo_spheres_volume, get_pyvista_spheres_volume, get_pyvol_spheres_volume
 from JDFTxFreeNrg.threespheres import triple_overlap
 from JDFTxFreeNrg.solv_entropy import get_vcav, eff_volume, _get_solv_entropy_trans
-# from JDFTxFreeNrg.testing import anl_sphere_volume, anl_2sphere_union_volume, get_mc_volume_samples, get_mesh_volume_samples
-# from JDFTxFreeNrg.solv_entropy import get_monte_carlo_spheres_volume, get_mesh_spheres_volume
-import numpy as np
 import matplotlib.pyplot as plt
 import timeit
 
@@ -175,33 +169,6 @@ def get_pyvol_volume_samples(rs: list[float], centers: list[np.ndarray], ncubess
     return v_pvs, t_pvs
 
 
-def get_mc_vcav_samples(
-        solvent_rs: list[float], 
-        solvent_centers: list[np.ndarray], 
-        solute_rs: list[float], 
-        solute_centers: list[np.ndarray], 
-        avg_volume_per_molecule: float,
-        nsampless: list[int],
-        zscore: float = 1.96, time_only: bool = False):
-    v_mcs = []
-    t_mcs = []
-    unc_mcs = []
-    for ns in nsampless:
-        t_mc_solv = time_mc_spheres_volume(solvent_rs, solvent_centers, npoints=int(ns), runs=1)
-        t_mc_solute = time_mc_spheres_volume(solute_rs, solute_centers, npoints=int(ns), runs=1)
-        t_mc = t_mc_solv + t_mc_solute
-        t_mcs.append(t_mc)
-        if not time_only:
-            v_solv, sem_solv = get_monte_carlo_spheres_volume(solvent_rs, solvent_centers, npoints=int(ns))
-            v_solute, sem_solute = get_monte_carlo_spheres_volume(solute_rs, solute_centers, npoints=int(ns))
-            vfree = avg_volume_per_molecule - v_solv
-            vcav = get_vcav(v_solute, vfree)
-            v_mcs.append(vcav)
-            # TODO: Proper uncertainty propagation here
-            unc_mcs.append(np.nan*zscore)
-    return v_mcs, t_mcs, unc_mcs
-
-
 def get_mc_generic_samples(
         rss: list[float],
         centerss: list[np.ndarray],
@@ -277,101 +244,8 @@ def get_pyvol_generic_samples(
     return out_generics, t_generics
 
 
-def get_mesh_vcav_samples(
-        solvent_rs: list[float], 
-        solvent_centers: list[np.ndarray], 
-        solute_rs: list[float], 
-        solute_centers: list[np.ndarray], 
-        avg_volume_per_molecule: float,
-        nsampless: list[int],
-        time_only: bool = False):
-    def treat_func(vs: list[float]) -> float:
-        v_solv = vs[0]
-        v_solute = vs[1]
-        vfree = avg_volume_per_molecule - v_solv
-        vcav = get_vcav(v_solute, vfree)
-        return vcav
-    v_meshs, t_meshs = get_mesh_generic_samples(
-        [solvent_rs, solute_rs],
-        [solvent_centers, solute_centers],
-        treat_func,
-        nsampless,
-        time_only,
-    )
-    return v_meshs, t_meshs
-
-def get_pyvol_vcav_samples(
-        solvent_rs: list[float], 
-        solvent_centers: list[np.ndarray], 
-        solute_rs: list[float], 
-        solute_centers: list[np.ndarray], 
-        avg_volume_per_molecule: float,
-        nsampless: list[int],
-        time_only: bool = False):
-    def treat_func(vs: list[float]) -> float:
-        v_solv = vs[0]
-        v_solute = vs[1]
-        vfree = avg_volume_per_molecule - v_solv
-        vcav = get_vcav(v_solute, vfree)
-        return vcav
-    v_meshs, t_meshs = get_pyvol_generic_samples(
-        [solvent_rs, solute_rs],
-        [solvent_centers, solute_centers],
-        treat_func,
-        nsampless,
-        time_only,
-    )
-    return v_meshs, t_meshs
 
 
-
-# def get_mesh_vcav_samples(
-#         solvent_rs: list[float], 
-#         solvent_centers: list[np.ndarray], 
-#         solute_rs: list[float], 
-#         solute_centers: list[np.ndarray], 
-#         avg_volume_per_molecule: float,
-#         nsampless: list[int],
-#         time_only: bool = False):
-#     v_meshs = []
-#     t_meshs = []
-#     for ns in nsampless:
-#         t_mesh_solv = time_mesh_spheres_volume(solvent_rs, solvent_centers, ncubes=int(ns), runs=1)
-#         t_mesh_solute = time_mesh_spheres_volume(solute_rs, solute_centers, ncubes=int(ns), runs=1)
-#         t_mesh = t_mesh_solv + t_mesh_solute
-#         t_meshs.append(t_mesh)
-#         if not time_only:
-#             v_solv = get_mesh_spheres_volume(solvent_rs, solvent_centers, ncubes=int(ns))
-#             v_solute = get_mesh_spheres_volume(solute_rs, solute_centers, ncubes=int(ns))
-#             vfree = avg_volume_per_molecule - v_solv
-#             vcav = get_vcav(v_solute, vfree)
-#             v_meshs.append(vcav)
-#     return v_meshs, t_meshs
-
-
-
-def get_pyvol_vcav_samples(
-        solvent_rs: list[float], 
-        solvent_centers: list[np.ndarray], 
-        solute_rs: list[float], 
-        solute_centers: list[np.ndarray], 
-        avg_volume_per_molecule: float,
-        nsampless: list[int],
-        time_only: bool = False):
-    v_meshs = []
-    t_meshs = []
-    for ns in nsampless:
-        t_mesh_solv = time_pyvol_spheres_volume(solvent_rs, solvent_centers, ncubes=int(ns), runs=1)
-        t_mesh_solute = time_pyvol_spheres_volume(solute_rs, solute_centers, ncubes=int(ns), runs=1)
-        t_mesh = t_mesh_solv + t_mesh_solute
-        t_meshs.append(t_mesh)
-        if not time_only:
-            v_solv = get_pyvol_spheres_volume(solvent_rs, solvent_centers, ncubes=int(ns))
-            v_solute = get_pyvol_spheres_volume(solute_rs, solute_centers, ncubes=int(ns))
-            vfree = avg_volume_per_molecule - v_solv
-            vcav = get_vcav(v_solute, vfree)
-            v_meshs.append(vcav)
-    return v_meshs, t_meshs
 
 def plot_volume_accuracy(
         vol_true: float, 
@@ -671,29 +545,12 @@ def test_relative_solve_entropy_trans(
 
 
 
+# nsampless = [1e3, 2e3, 3e3]
+# test_single_sphere_volume(nsampless=nsampless)
+# test_double_sphere_volume(nsampless=nsampless)
+# test_vcav(nsampless=nsampless)
+# test_eff_volume(nsampless=nsampless)
+# test_solve_entropy_trans(nsampless=nsampless)
+# test_relative_solve_entropy_trans(nsampless=nsampless)
 
-# test_single_sphere_volume()
-# test_double_sphere_volume()
-# test_triple_sphere_volume(pyvista_sample_scale=0.38, mesh_sample_scale=120.)
-# test_vcav()
-# test_eff_volume()
-# test_solve_entropy_trans()
-# test_relative_solve_entropy_trans()
 
-# rs_solute1 = [0.25, 0.5]
-# centers_solute1 = [np.zeros(3), np.ones(3)*0.1]
-
-# rs_solute2 = [0.25, 0.5]
-# centers_solute2 = [np.zeros(3), np.ones(3)*0.65]
-
-# rs_solvent = [0.3]
-# centers_solvent = [np.zeros(3)]
-# test_relative_solve_entropy_trans(
-#         solvent_rs=rs_solvent, solvent_centers=centers_solvent,
-#         solute_rs1=rs_solute1, solute_centers1=centers_solute1,
-#         solute_rs2=rs_solute2, solute_centers2=centers_solute2,
-#         scale_free_volume=2.0,
-# )
-# test_double_sphere_volume(
-#     rs_solute1, centers_solute1
-# )
