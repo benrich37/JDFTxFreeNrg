@@ -168,7 +168,7 @@ def get_entropy_rot(structure: Structure,  T: float):
         float: Entropy in eV/K
     """
     qr = get_q_rot(structure, T)
-    return _get_entropy_rot(qr, linear = check_is_linear(structure)) * J_to_eV
+    return _get_entropy_rot(qr, linear = check_is_linear(structure))
 
 
 
