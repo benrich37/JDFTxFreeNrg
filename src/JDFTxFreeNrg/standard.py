@@ -6,8 +6,7 @@ import math
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 
 freq_to_vt = 100 * const.speed_of_light * const.Planck / const.k
-eV_to_J = const.eV
-J_to_eV = 1 / eV_to_J
+k_ev = const.k * const.eV
 
 
 def get_avg_mom_inertia(structure: Structure):
@@ -101,7 +100,7 @@ def get_entropy_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
     in entropies from other sources, you may need to subtract that out.
     """
     q = get_q_trans(mass, T, vol, d=d)
-    return const.k * (np.log(q) + 5/2) * J_to_eV
+    return k_ev * (np.log(q) + 5/2)
 
 def get_enthalpy_trans(T: float, d=3):
     """ Returns the translational enthalpy in eV.
@@ -112,7 +111,7 @@ def get_enthalpy_trans(T: float, d=3):
     Returns: 
         float: Enthalpy in eV
     """
-    return (d/2) * const.k * T * J_to_eV
+    return (d/2) * k_ev * T
 
 """
 ROT
@@ -154,7 +153,7 @@ def _get_entropy_rot(qr: float, linear: bool = False) -> float:
     Returns: 
         float: Entropy in eV/K
     """
-    return const.k * (np.log(qr) + 1 + 0.5*(not linear)) * J_to_eV
+    return k_ev * (np.log(qr) + 1 + 0.5*(not linear))
 
 
 def get_entropy_rot(structure: Structure,  T: float):
@@ -185,7 +184,7 @@ def get_enthalpy_rot(structure: Structure,  T: float, d: int = 3):
     """
     if check_is_linear(structure):
         d = min(2, d)
-    return (d/2) * const.k * T * J_to_eV
+    return (d/2) * k_ev * T
 
 """
 VIB
@@ -216,7 +215,7 @@ def get_enthalpy_vib(freq: float | np.ndarray, T: float) -> float:
         float: enthalpy in eV
     """
     vt_over_T = freq * freq_to_vt / T
-    return __get_ho_vib_enthalpies(vt_over_T, T) * const.k * J_to_eV
+    return __get_ho_vib_enthalpies(vt_over_T, T) * k_ev
 
 
 def _get_ho_vib_entropies(vt_over_t: float | np.ndarray) -> float:
@@ -240,4 +239,4 @@ def get_entropy_vib(freq: float | np.ndarray, T: float) -> float:
         float: entropy in eV/K
     """
     vt_over_t = freq * freq_to_vt / T
-    return _get_ho_vib_entropies(vt_over_t) * const.k * J_to_eV
+    return _get_ho_vib_entropies(vt_over_t) * k_ev

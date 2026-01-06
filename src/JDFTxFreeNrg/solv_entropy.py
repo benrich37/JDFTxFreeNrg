@@ -229,18 +229,18 @@ def _get_solv_entropy_trans(
     ) -> float:
     return get_entropy_trans(mass, T, veff, d=d)
 
-def get_standard_state_correction(T: float, P: float = 101325, M: float = 1) -> float:
+def get_standard_state_correction(T: float = 300., P: float = 1., M: float = 1.) -> float:
     """ Returns standard state correction for entropy from 1 mol/L to ideal gas at given P and T
 
     Args:
         T (float): temperature in K
-        P (float): pressure in Pa
+        P (float): pressure in atm
         M (float): molarity in mol/L
 
     Returns:
         float: Standard state correction in eV/K
     """
-    ideal_gas_molarity = (P / (const.R * T))*(1/1000)  # mol/L
+    ideal_gas_molarity = (P * 101325. / (const.R * T))*(1/1000)  # mol/L
     standard_state_correction = const.k * np.log(ideal_gas_molarity / M) * J_to_eV  # eV/K
     return standard_state_correction
 

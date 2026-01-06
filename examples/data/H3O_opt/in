@@ -1,0 +1,51 @@
+latt-scale 1 1 1 
+latt-move-scale 0.0 0.0 0.0 
+coords-type Lattice 
+lattice \
+    37.794522518156 0.000000000000 0.000000000000 \
+    0.000000000000 37.794522518156 0.000000000000 \
+    0.000000000000 0.000000000000 37.794522518156 
+ion O 0.511743913825 0.500000000000 0.493066316945 1 
+ion H 0.535231741475 0.540682110850 0.506933683055 1 
+ion H 0.535231741475 0.459317889150 0.506933683055 1 
+ion H 0.464768258525 0.500000000000 0.506933683055 1 
+core-overlap-check none 
+ion-species /global/homes/b/beri9208/pseudopotentials/GBRV/O.uspp 
+ion-species /global/homes/b/beri9208/pseudopotentials/GBRV/H.uspp 
+
+kpoint-folding 1 1 1 
+
+van-der-waals D3 
+elec-cutoff 20.0 
+elec-smearing Fermi 0.001 
+spintype z-spin 
+elec-initial-magnetization 0.0 no 
+elec-initial-charge -1.0 
+converge-empty-states yes 
+
+initial-state $VAR 
+
+lcao-params 300 
+ionic-minimize \
+    convergeAll  yes \
+    energyDiffThreshold  1e-08 \
+    knormThreshold  1e-05 \
+    maxThreshold  yes \
+    nIterations  1000 
+electronic-minimize \
+    convergeAll  yes \
+    energyDiffThreshold  1e-08 \
+    nIterations  100 
+
+fluid LinearPCM 
+fluid-solvent H2O 
+fluid-anion F- 0.1 
+fluid-cation K+ 0.1 
+pcm-variant CANDLE 
+
+dump-name $VAR 
+band-projection-params yes no 
+dump End  State 
+dump End  BandEigs  BandProjections  Fillings  Kpoints 
+dump End  ElecDensity 
+
