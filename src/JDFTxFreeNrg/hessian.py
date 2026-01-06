@@ -22,8 +22,9 @@ def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
 
 
 
-def get_invsqrtM(structure) -> np.ndarray:
-    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites]) * 1822.888  # convert to amu
+def get_invsqrtM(structure: Structure) -> np.ndarray:
+    # TODO: Replace the 1822.888 magic number with a proper constant import
+    mass_vector = structure.composition.weight * 1822.888  # convert to amu
     invsqrtM = np.zeros((len(mass_vector)*3, len(mass_vector)*3))
     for iAtom in range(len(mass_vector)):
         for iCart in range(3):
