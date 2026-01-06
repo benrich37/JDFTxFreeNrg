@@ -1,6 +1,5 @@
 import numpy as np
 from JDFTxFreeNrg.volume import get_mesh_spheres_volume, get_monte_carlo_spheres_volume, get_pyvista_spheres_volume, get_pyvol_spheres_volume
-from JDFTxFreeNrg.threespheres import triple_overlap
 from JDFTxFreeNrg.solv_entropy import get_vcav, eff_volume, _get_solv_entropy_trans
 import matplotlib.pyplot as plt
 import timeit
@@ -11,15 +10,8 @@ def anl_spheres_volume(rs: list[float], centers: list[np.ndarray]) -> float:
         return anl_sphere_volume(rs[0])
     elif len(rs) == 2:
         return anl_2sphere_union_volume(rs[0], rs[1], np.linalg.norm(centers[0]-centers[1]))
-    elif len(rs) == 3:
-        return anl_3sphere_union_volume(
-            rs[0], rs[1], rs[2],
-            centers[0],
-            centers[1],
-            centers[2],
-        )
     else:
-        raise NotImplementedError("Analytical volume calculation only implemented for up to 3 spheres.")
+        raise NotImplementedError("Analytical volume calculation only implemented for up to 2 spheres.")
 
 def anl_sphere_volume(r: float) -> float:
     """Return volume of a sphere.
@@ -74,29 +66,6 @@ def anl_2sphere_union_volume(r1: float, r2: float, l: float):
     # Use intersection volume to subtract overlap
     vol -= anl_2sphere_intersection_volume(r1, r2, l)
     return vol
-
-def anl_3sphere_union_volume(r1: float, r2: float, r3: float, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> float:
-    """Return volume of union of three spheres.
-
-    Args:
-        r1 (float): Radius of sphere 1.
-        r2 (float): Radius of sphere 2.
-        r3 (float): Radius of sphere 3.
-        l12 (float): Distance between centers of sphere 1 and 2.
-        l13 (float): Distance between centers of sphere 1 and 3.
-        l23 (float): Distance between centers of sphere 2 and 3.
-
-    Returns:
-        float: Volume of union of three spheres.
-    """
-    vol1 = anl_sphere_volume(r1)
-    vol2 = anl_sphere_volume(r2)
-    vol3 = anl_sphere_volume(r3)
-    vol12 = anl_2sphere_intersection_volume(r1, r2, np.linalg.norm(p1 - p2))
-    vol13 = anl_2sphere_intersection_volume(r1, r3, np.linalg.norm(p1 - p3))
-    vol23 = anl_2sphere_intersection_volume(r2, r3, np.linalg.norm(p3 - p2))
-    vol123 = triple_overlap(p1, p2, p3, r1, r2, r3, mc_check=False)
-    return vol1 + vol2 + vol3 - vol12 - vol13 - vol23 + 2*vol123
 
 def time_mesh_spheres_volume(rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000, runs=5):
     def time_fn():
