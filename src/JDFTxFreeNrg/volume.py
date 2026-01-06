@@ -5,6 +5,7 @@ from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from pathlib import Path
 import json
 import warnings
+# Band-aid until I fix a UserWarning about `JDFTXOutfile` structure's having partially filled site properties
 warnings.filterwarnings('ignore', category=UserWarning)
 
 
