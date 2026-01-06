@@ -6,7 +6,7 @@ import math
 from pymatgen.symmetry.analyzer import PointGroupAnalyzer
 
 freq_to_vt = 100 * const.speed_of_light * const.Planck / const.k
-k_ev = const.k * const.eV
+k_ev = const.k / const.eV
 
 
 def get_avg_mom_inertia(structure: Structure):
