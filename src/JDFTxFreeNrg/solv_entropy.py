@@ -221,7 +221,7 @@ def get_solv_entropy_trans(
         float: entropy in eV/K
     """
     veff = eff_volume(vm, vs, vf)
-    mass = sum([site.specie.atomic_mass for site in structure])
+    mass = structure.composition.weight
     return _get_solv_entropy_trans(mass, T, veff, d=d)
 
 def _get_solv_entropy_trans(
