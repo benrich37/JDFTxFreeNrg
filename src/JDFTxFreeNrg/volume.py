@@ -4,6 +4,8 @@ from pymatgen.io.jdftx.inputs import JDFTXInfile
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from pathlib import Path
 import json
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 
 def get_pyvol_spheres_volume(
@@ -167,6 +169,10 @@ class StructureVolume(Structure):
         struct_vol.set_cache_parent(calc_dir)
         struct_vol.method = method
         return struct_vol
+    
+    @classmethod
+    def from_outfile_path(cls, outfile_path: Path, method: str = "MC"):
+        return cls.from_calc_dir(outfile_path.parent, use_in=False, method=method)
 
     def clear_cache(self):
         self.cache = {}
