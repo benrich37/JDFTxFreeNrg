@@ -237,8 +237,12 @@ class StructureVolume(Structure):
             idx_key = self.get_idcs_key(idcs)
             if idx_key not in self.cache[self.method]:
                 self.cache[self.method][idx_key] = {}
-            self.cache[self.method][idx_key][self.get_npoints_key(npoints)] = vol
-            self.backup_cache()
+            if self.method == "MC":
+                self.cache[self.method][idx_key][self.get_npoints_key(npoints)] = vol
+                self.backup_cache()
+            else:
+                self.cache[self.method][idx_key][self.get_grid_spacing_key(grid_spacing)] = vol
+                self.backup_cache()
         return vol
     
     # TODO: _get_volume_idcs_mc and _get_volume_idcs_gs have a lot of repeated code, refactor
