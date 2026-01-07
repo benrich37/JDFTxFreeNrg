@@ -145,7 +145,7 @@ class StructureVolume(Structure):
     method: str = "MC"
     npoint_default: int = 1000000
     # TODO: benchmark the actual grid spacing instead of the npoints so we know where this value stands
-    grid_spacing_default: float = 0.001
+    grid_spacing_default: float = 0.01
 
     def set_cache_parent(self, cache_parent: Path | None = None):
         if cache_parent is not None:
