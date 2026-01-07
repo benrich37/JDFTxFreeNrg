@@ -5,6 +5,7 @@ import numpy as np
 from pymatgen.core.structure import Structure
 from scipy.constants import Rydberg
 from JDFTxFreeNrg.projection import get_projector, project_out_subspace, project_on_subspace
+from JDFTxFreeNrg.glogwrite import write_Gaussian_vib_log
 
 
 def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
@@ -176,3 +177,14 @@ def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None 
     omegaSqEigs = get_omegaSqEigs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse, use_in=use_in, trim_zero=trim_zero, zero_thresh=_zero_thresh, proj_rot=proj_rot, proj_trans=proj_trans)
     freqs = np.array(freq_nrg_to_cm(get_freqs(np.array(omegaSqEigs))))
     return freqs
+
+
+def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecule_sets: list[dict] | None = None, reverse=True, zero_thresh: float = 1e-3, use_in: bool = True):
+    omegaSqEigs, omegaSqEvecs, evecs = get_omegaSqEigs_evecs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse)
+    if use_in:
+        structure = JDFTXInfile.from_file(calc_dir / "in").structure
+    else:
+        structure = JDFTXOutfile.from_file(calc_dir / "out").structure
+    freqs_cm = freq_nrg_to_cm(get_freqs(omegaSqEigs))
+    structure = get_structure_for_gaussian_vib_log(structure, freqs_cm, omegaSqEvecs, zero_thresh=zero_thresh)
+    write_Gaussian_vib_log(structure, log_path)
