@@ -95,7 +95,9 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
     S_t -= (ntrans - 1) * k_ev
     return E_t, S_t
 
-def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False) -> tuple[float, float]:
+def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False,
+                        integration_method: str = "MC", integration_kwargs: dict | None = None
+                        ) -> tuple[float, float]:
     if integration_kwargs is None:
         integration_kwargs = {}
     if molecule_sets is None:
