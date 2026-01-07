@@ -41,7 +41,8 @@ def resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
             mset["axes"] = resolved_axes
         
 
-def get_free_energy_vib(vib_calc_dir: Path, T: float, qrrho: bool = True, freq0: float = 100., alpha: float = 4.0, molecule_sets: list[dict] | None = None, bad_proj_method_len: int = 0, no_proj: bool = False, structure: Structure | None = None, verbose: bool = False) -> tuple[float, float, float]:
+def get_free_energy_vib(vib_calc_dir: Path, T: float, qrrho: bool = True, freq0: float = 100., alpha: float = 4.0, molecule_sets: list[dict] | None = None, bad_proj_method_len: int = 0, no_proj: bool = False, structure: Structure | None = None, verbose: bool = False,
+                        integration_method: str = "MC", integration_kwargs: dict | None = None) -> tuple[float, float, float]:
     if molecule_sets is None:
         molecule_sets = []
     if structure is None:
@@ -59,7 +60,11 @@ def get_free_energy_vib(vib_calc_dir: Path, T: float, qrrho: bool = True, freq0:
         S_v = np.nansum(get_qrrho_vib_entropies(freqs, T, freq0=0, alpha=alpha)).real
     return E_v, S_v
 
-def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False) -> tuple[float, float]:
+def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False,
+                       integration_method: str = "MC", integration_kwargs: dict | None = None
+                       ) -> tuple[float, float]:
+    if integration_kwargs is None:
+        integration_kwargs = {}
     if molecule_sets is None:
         molecule_sets = []
     structure = StructureVolume.from_calc_dir(solute_calc_dir)
@@ -70,7 +75,7 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
     vf = None
     if solvent_calc_dir is not None:
         solv_structure = StructureVolume.from_calc_dir(solvent_calc_dir)
-        vs = solv_structure.get_volume()
+        vs = solv_structure.get_volume(**integration_kwargs)
         vf = get_vfree(vs, solvent_molarity)
     for mset in molecule_sets:
         idcs = mset["indices"]
@@ -80,7 +85,7 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
             d = 3 if axes is None else len(axes)
             E_t += get_enthalpy_trans(T, d=d)
             if solvent_calc_dir is not None:
-                vm = structure.get_volume(idcs=idcs)
+                vm = structure.get_volume(idcs=idcs, **integration_kwargs)
                 S_t += get_solv_entropy_trans(substructure, vm, vs, vf, T, d=d)
             else:
                 vol = get_ideal_gas_vol(P_ref, T)
@@ -91,17 +96,19 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
     return E_t, S_t
 
 def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False) -> tuple[float, float]:
+    if integration_kwargs is None:
+        integration_kwargs = {}
     if molecule_sets is None:
         molecule_sets = []
-    structure = StructureVolume.from_calc_dir(solute_calc_dir)
+    structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
     clean_structure(structure)
     E_r = 0.0
     S_r = 0.0
     vs = None
     vf = None
     if solvent_calc_dir is not None:
-        solv_structure = StructureVolume.from_calc_dir(solvent_calc_dir)
-        vs = solv_structure.get_volume()
+        solv_structure = StructureVolume.from_calc_dir(solvent_calc_dir, method=integration_method)
+        vs = solv_structure.get_volume(**integration_kwargs)
         vf = get_vfree(vs, solvent_molarity)
     for mset in molecule_sets:
         idcs = mset["indices"]
@@ -113,7 +120,7 @@ def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path 
             # Don't yet have a partition function for a 1D rigid rotor
             if d == 3:
                 if solvent_calc_dir is not None:
-                    vm = structure.get_volume(idcs=idcs)
+                    vm = structure.get_volume(idcs=idcs, **integration_kwargs)
                     S_r += get_solv_entropy_rot(substructure, vm, vf, T)
                 else:
                     S_r += get_entropy_rot(substructure, T)
@@ -128,15 +135,16 @@ def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path 
 def get_free_energy(
         solute_calc_dir: Path, vib_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., M_ref: float = 1,
         qrrho: bool = True, freq0: float = 100., alpha: float = 4.0, apply_ssc: bool = True, verbose: bool = False, molecule_sets: list[dict] | None = None,
-        free_trans: bool = True, free_rot: bool = True, mu: float | bool | None = None, skip_elec: bool = False, bad_proj_method_len: int = 0, no_proj: bool = False
+        free_trans: bool = True, free_rot: bool = True, mu: float | bool | None = None, skip_elec: bool = False, bad_proj_method_len: int = 0, no_proj: bool = False,
+        integration_method: str = "MC", integration_kwargs: dict | None = None
         ) -> float:
     if molecule_sets is None:
         molecule_sets = []
     if skip_elec:
-        structure = StructureVolume.from_calc_dir(solute_calc_dir)
+        structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
         A_e = 0.0
     else:
-        structure = StructureVolume.from_calc_dir(solute_calc_dir)
+        structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
         outfile = JDFTXOutfile.from_file(solute_calc_dir / "out")
         A_e = outfile.slices[-1].ecomponents["F"]
     clean_structure(structure)
@@ -148,10 +156,12 @@ def get_free_energy(
         vib_calc_dir, T, qrrho=qrrho, freq0=freq0, alpha=alpha, molecule_sets=molecule_sets, bad_proj_method_len=bad_proj_method_len, no_proj=no_proj, structure=structure,
     )
     E_t, S_t = get_free_energy_tr(
-        solute_calc_dir, T, solvent_calc_dir=solvent_calc_dir, solvent_molarity=solvent_molarity, P_ref=P_ref, molecule_sets=molecule_sets, verbose=verbose
+        solute_calc_dir, T, solvent_calc_dir=solvent_calc_dir, solvent_molarity=solvent_molarity, P_ref=P_ref, molecule_sets=molecule_sets, verbose=verbose,
+        integration_method=integration_method, integration_kwargs=integration_kwargs
     )
     E_r, S_r = get_free_energy_rot(
-        solute_calc_dir, T, solvent_calc_dir=solvent_calc_dir, solvent_molarity=solvent_molarity, P_ref=P_ref, molecule_sets=molecule_sets, verbose=verbose
+        solute_calc_dir, T, solvent_calc_dir=solvent_calc_dir, solvent_molarity=solvent_molarity, P_ref=P_ref, molecule_sets=molecule_sets, verbose=verbose,
+        integration_method=integration_method, integration_kwargs=integration_kwargs
     )
     A_v = E_v - T * S_v
     total = A_e + A_v + E_t + E_r - T * (S_t + S_r)
