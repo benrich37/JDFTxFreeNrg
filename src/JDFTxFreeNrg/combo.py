@@ -67,14 +67,14 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
         integration_kwargs = {}
     if molecule_sets is None:
         molecule_sets = []
-    structure = StructureVolume.from_calc_dir(solute_calc_dir)
+    structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
     clean_structure(structure)
     E_t = 0.0
     S_t = 0.0
     vs = None
     vf = None
     if solvent_calc_dir is not None:
-        solv_structure = StructureVolume.from_calc_dir(solvent_calc_dir)
+        solv_structure = StructureVolume.from_calc_dir(solvent_calc_dir, method=integration_method)
         vs = solv_structure.get_volume(**integration_kwargs)
         vf = get_vfree(vs, solvent_molarity)
     for mset in molecule_sets:
