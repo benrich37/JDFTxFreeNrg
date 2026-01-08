@@ -12,8 +12,6 @@ from JDFTxFreeNrg.volume import StructureVolume, get_vdw_volume
 # liter is 0.1 m^3, A is 1e-10 m
 molarity_to_part_per_A3 = const.Avogadro/(((0.1**3))/((1e-10)**3))
 A3_to_liters = ((1e-10)/(0.1))**3  # Å^3 to liters
-eV_to_J = const.eV
-J_to_eV = 1 / eV_to_J
 k_ev = const.k / const.eV
 
 
