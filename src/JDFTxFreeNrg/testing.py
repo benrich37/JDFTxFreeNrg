@@ -4,6 +4,56 @@ from JDFTxFreeNrg.solv_entropy import get_vcav, eff_volume, _get_solv_entropy_tr
 import matplotlib.pyplot as plt
 import timeit
 
+def anl_spheres_area(rs: list[float], centers: list[np.ndarray]) -> float:
+    assert len(rs) == len(centers), "Number of radii must match number of centers."
+    if len(rs) == 1:
+        return anl_sphere_area(rs[0])
+    elif len(rs) == 2:
+        return anl_2sphere_union_area(rs[0], rs[1], np.linalg.norm(centers[0]-centers[1]))
+    else:
+        raise NotImplementedError("Analytical area calculation only implemented for up to 2 spheres.")
+    
+def anl_sphere_area(r: float) -> float:
+    """Return surface area of a sphere.
+
+    Args:
+        r (float): Radius of the sphere.
+
+    Returns:
+        float: Surface area of the sphere.
+    """
+    return 4 * np.pi * r**2
+
+def anl_2sphere_intersection_area(r1: float, r2: float, l: float):
+    if l >= r1 + r2:
+        return 0.0
+    # Break down the distance between centers into four parts:
+    ## l = A + B + C + D
+    ## A = distance from center 1 to closest point on sphere 2 (= l - r2)
+    ## B = cap height for cap from sphere 2
+    ## C = cap height for cap from sphere 1
+    ## D = distance from center 2 to closest point on sphere 1 (= l - r1)
+    # In the case where the smaller sphere is completely inside the larger sphere, this equation doesn't work
+    # and the intersection is just the area of the smaller sphere
+    r1, r2 = max(r1, r2), min(r1, r2)
+    if l + r2 <= r1:
+        return anl_sphere_volume(r2)
+    # We can solve A + B = m, as m being the distance from first sphere where the two laguerre powers are equal,
+    # which equates to solving x**2 - r1**2 = (x-l)**2 - r2**2, giving x = ((r1**2) - (r2**2) + (l**2))/(2*l).
+    m = ((r1**2) - (r2**2) + (l**2))/(2*l)
+    A = l - r2
+    D = l - r1
+    B = m - A
+    C = l - (A + B + D)
+    Acap1 = 2 * np.pi * r1 * C
+    Acap2 = 2 * np.pi * r2 * B
+    Aintersection = Acap1 + Acap2
+    return Aintersection
+
+
+def anl_2sphere_union_area(r1: float, r2: float, l: float):
+    return anl_sphere_area(r1) + anl_sphere_area(r2) - anl_2sphere_intersection_area(r1, r2, l)
+
 def anl_spheres_volume(rs: list[float], centers: list[np.ndarray]) -> float:
     assert len(rs) == len(centers), "Number of radii must match number of centers."
     if len(rs) == 1:
@@ -284,6 +334,7 @@ def ensure_random_spheres(rs: list[float] | None = None, centers: list[np.ndarra
     if centers is None:
         centers = _centers
     return rs, centers
+
 
 
 

@@ -106,6 +106,7 @@ def get_vfree(vol_solvent: float, molarity: float) -> float:
     avg_volume_per_molecule = 1 / solvent_density
     vfree = avg_volume_per_molecule - vol_solvent
     return vfree
+    
 
 def get_radius_of_gyration(structure: Structure) -> float:
     """ Returns radius of gyration of a structure
@@ -304,3 +305,17 @@ def get_solv_entropy_cav_scp(
         return get_solv_entropy_cav_scp_ep(vol_solute, vol_solvent, ep_r, T=T)
     else:
         return get_solv_entropy_cav_scp_epalpha(vol_solute, vol_solvent, ep_r, alpha, T=T)
+    
+
+def get_Sc0(vol_solute: float, vol_solvent: float, solvent_molarity: float):
+    return (k_ev * vol_solute / vol_solvent) * np.log(1 - (solvent_molarity * A3_to_liters * vol_solvent))
+
+def get_mol_geometry_factor(sa_solute: float, sa_solvent: float, box_sa_solute: float, box_sa_solvent: float):
+    phi_solv = sa_solvent / box_sa_solvent
+    phi_solute = sa_solute / box_sa_solute
+    return (sa_solute * phi_solv) / (sa_solvent * phi_solute)
+
+
+
+def get_solv_entropy_cav_acc_factor_approx():
+    return get_Sc0(vol_solute, vol_solvent, solvent_molarity) - get_mol_geometry_factor()*(get_deltaS_gas_sol() + k_ev * omega * 5.365)
