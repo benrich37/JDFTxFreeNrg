@@ -14,6 +14,7 @@ molarity_to_part_per_A3 = const.Avogadro/(((0.1**3))/((1e-10)**3))
 A3_to_liters = ((1e-10)/(0.1))**3  # Å^3 to liters
 eV_to_J = const.eV
 J_to_eV = 1 / eV_to_J
+k_ev = const.k / const.eV
 
 
 
@@ -241,8 +242,67 @@ def get_standard_state_correction(T: float = 300., P: float = 1., M: float = 1.)
         float: Standard state correction in eV/K
     """
     ideal_gas_molarity = ((P * 101325.) / (const.R * T))*(1/1000)  # mol/L
-    standard_state_correction = const.k * np.log(ideal_gas_molarity / M) * J_to_eV  # eV/K
+    standard_state_correction = k_ev * np.log(ideal_gas_molarity / M)  # eV/K
     return standard_state_correction
 
+def get_Gc_f(y, R):
+    fA = -np.log(1-y) + R*(3/(1-y))
+    fB = (R**2)*((3*y/(1-y)) + (9/2)*((y/(1-y))**2))
+    return fA + fB
 
+def get_Gc_y(ep_r):
+    return (3/(4*np.pi))*((ep_r - 1)/(ep_r + 2))
 
+def get_Gc_R(vol_solute: float, vol_solvent: float):
+    return (vol_solute/vol_solvent)**(1/3)
+
+def get_Gc(y, R, T: float = 300.):
+    return k_ev*T*get_Gc_f(y, R)
+
+def get_solv_entropy_cav_scp_ep(vol_solute: float, vol_solvent: float, ep_r: float, T: float = 300.):
+    """ Returns the cavitation entropy from SCP model in common limit of large Gc/T"""
+    return get_Gc(
+        get_Gc_y(ep_r),
+        get_Gc_R(vol_solute, vol_solvent),
+        T = T)/T
+
+def get_Gc_dy_dT_atP(alpha, y):
+    return - alpha * y
+
+def get_Gc_df_dy(y: float, R: float):
+    numA = -((R**2) * (6*y + 3))
+    numB = 3 * R * (y - 1)
+    numC = -(y-1)**2
+    denom = (y - 1)**3
+    return (numA + numB + numC) / denom
+
+def get_dGc_dT_atP(vol_solute: float, vol_solvent: float, ep_r: float, alpha: float, T: float = 300.):
+    y = get_Gc_y(ep_r)
+    R = get_Gc_R(vol_solute, vol_solvent)
+    Gc = get_Gc(y, R, T=T)
+    df_fy = get_Gc_df_dy(y, R)
+    dy_dT = get_Gc_dy_dT_atP(alpha, y)
+    return (Gc / T) + k_ev * T * df_fy * dy_dT
+
+def get_solv_entropy_cav_scp_epalpha(vol_solute: float, vol_solvent: float, ep_r: float, alpha: float, T: float = 300.):
+    return - get_dGc_dT_atP(vol_solute, vol_solvent, ep_r, alpha, T=T)
+
+def get_solv_entropy_cav_scp(
+        vol_solute: float, vol_solvent: float, ep_r: float, alpha: float | None = None, T: float = 300.
+    ):
+    """ Returns cavitation entropy from SCP model limit (alpha is None) or full model (alpha provided)
+
+    Args:
+        vol_solute (float): solute volume in Å^3
+        vol_solvent (float): solvent volume in Å^3
+        ep_r (float): Dialectric constant of the solvent
+        alpha (float | None): Isobaric volumetric thermal expansion coefficient of the solvent
+        T (float): temperature in K
+    
+    Returns:
+        float: cavitation entropy in eV/K
+    """
+    if alpha is None:
+        return get_solv_entropy_cav_scp_ep(vol_solute, vol_solvent, ep_r, T=T)
+    else:
+        return get_solv_entropy_cav_scp_epalpha(vol_solute, vol_solvent, ep_r, alpha, T=T)
