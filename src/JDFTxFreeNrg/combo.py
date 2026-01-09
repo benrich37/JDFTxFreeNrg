@@ -42,22 +42,24 @@ def resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
         
 
 def get_free_energy_vib(vib_calc_dir: Path, T: float, qrrho: bool = True, freq0: float = 100., alpha: float = 4.0, molecule_sets: list[dict] | None = None, bad_proj_method_len: int = 0, no_proj: bool = False, structure: Structure | None = None, verbose: bool = False,
-                        integration_method: str = "MC", integration_kwargs: dict | None = None) -> tuple[float, float, float]:
+                        remove_imag: bool = False) -> tuple[float, float, float]:
     if molecule_sets is None:
         molecule_sets = []
     if structure is None:
         structure = StructureVolume.from_calc_dir(vib_calc_dir)
     resolve_axes(structure, molecule_sets)
-    freqs = get_freqs_cm_from_calc_dir(vib_calc_dir, molecule_sets=None if no_proj else molecule_sets, proj_rot=False, proj_trans=False, trim_zero = (bad_proj_method_len == 0))[bad_proj_method_len:].real
-    freqs = np.array([f for f in freqs if f > 1e-6])
+    freqs = get_freqs_cm_from_calc_dir(vib_calc_dir, molecule_sets=None if no_proj else molecule_sets, proj_rot=False, proj_trans=False, trim_zero = (bad_proj_method_len == 0))[bad_proj_method_len:]
+    if remove_imag:
+        freqs = freqs.real
+    # freqs = np.array([f for f in freqs if f > 1e-6])
     if verbose:
         print_freqs(freqs, zero_thresh=None)
     if qrrho:
-        E_v = np.nansum(get_qrrho_vib_enthalpies(freqs, T, freq0=freq0, alpha=alpha)).real
-        S_v = np.nansum(get_qrrho_vib_entropies(freqs, T, freq0=freq0, alpha=alpha)).real
+        E_v = np.nansum(get_qrrho_vib_enthalpies(freqs, T, freq0=freq0, alpha=alpha))
+        S_v = np.nansum(get_qrrho_vib_entropies(freqs, T, freq0=freq0, alpha=alpha))
     else:
-        E_v = np.nansum(get_qrrho_vib_enthalpies(freqs, T, freq0=0, alpha=alpha)).real
-        S_v = np.nansum(get_qrrho_vib_entropies(freqs, T, freq0=0, alpha=alpha)).real
+        E_v = np.nansum(get_qrrho_vib_enthalpies(freqs, T, freq0=0, alpha=alpha))
+        S_v = np.nansum(get_qrrho_vib_entropies(freqs, T, freq0=0, alpha=alpha))
     return E_v, S_v
 
 def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path | None = None, solvent_molarity: float = 55.5, P_ref: float = 1., molecule_sets: list[dict] | None = None, verbose: bool = False,
@@ -80,7 +82,7 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
     for mset in molecule_sets:
         idcs = mset["indices"]
         substructure = Structure.from_sites([structure.sites[i] for i in idcs])
-        if mset["trans"]:
+        if mset.get("trans", False):
             axes = mset.get("axes", None)
             d = 3 if axes is None else len(axes)
             E_t += get_enthalpy_trans(T, d=d)
@@ -115,7 +117,7 @@ def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path 
     for mset in molecule_sets:
         idcs = mset["indices"]
         substructure = Structure.from_sites([structure.sites[i] for i in idcs])
-        if mset["rot"]:
+        if mset.get("rot", False):
             axes = mset.get("axes", None)
             d = 3 if axes is None else len(axes)
             E_r += get_enthalpy_rot(substructure, T, d=d)
@@ -155,7 +157,7 @@ def get_free_energy(
     if free_rot:
         molecule_sets = [{"indices": list(range(len(structure.sites))), "trans": False, "rot": True}] + molecule_sets
     E_v, S_v = get_free_energy_vib(
-        vib_calc_dir, T, qrrho=qrrho, freq0=freq0, alpha=alpha, molecule_sets=molecule_sets, bad_proj_method_len=bad_proj_method_len, no_proj=no_proj, structure=structure,
+        vib_calc_dir, T, qrrho=qrrho, freq0=freq0, alpha=alpha, molecule_sets=molecule_sets, bad_proj_method_len=bad_proj_method_len, no_proj=no_proj, structure=structure, verbose=verbose
     )
     E_t, S_t = get_free_energy_tr(
         solute_calc_dir, T, solvent_calc_dir=solvent_calc_dir, solvent_molarity=solvent_molarity, P_ref=P_ref, molecule_sets=molecule_sets, verbose=verbose,

@@ -45,6 +45,7 @@ def freq_nrg_to_cm(freqs: np.ndarray) -> np.ndarray:
 
 
 def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, trans = True, rot = True, print_removal: bool = True, reverse: bool = False) -> np.ndarray:
+    # TODO: Protect reverse from being fed an empty projector
     projector = get_projector(structure, trans=trans, rot=rot, molecule_sets=molecule_sets, print_removal=print_removal)
     if reverse:
         K_proj = project_on_subspace(K, projector)
@@ -179,7 +180,7 @@ def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None 
     return freqs
 
 
-def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecule_sets: list[dict] | None = None, reverse=True, zero_thresh: float = 1e-3, use_in: bool = True):
+def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, zero_thresh: float = 1e-3, use_in: bool = True):
     omegaSqEigs, omegaSqEvecs, evecs = get_omegaSqEigs_evecs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse)
     if use_in:
         structure = JDFTXInfile.from_file(calc_dir / "in").structure

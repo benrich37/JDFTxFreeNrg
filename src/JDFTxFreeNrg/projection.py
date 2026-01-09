@@ -161,11 +161,37 @@ def get_rotations_molecule(
         projectors = [v for v in projectors.T]
     return projectors
 
+ref_axs = {
+    "x": np.array([1,0,0], dtype=np.float64),
+    "y": np.array([0,1,0], dtype=np.float64),
+    "z": np.array([0,0,1], dtype=np.float64)
+}
+
+def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
+    if isinstance(axis, np.ndarray):
+        return axis
+    elif isinstance(axis, str):
+        return ref_axs[axis]
+    elif isinstance(axis, list):
+        p0 = structure.cart_coords[axis[0]]
+        p1 = structure.cart_coords[axis[1]]
+        return p1 - p0
+
+def resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
+    for mset in molecule_sets:
+        if "axes" in mset:
+            axes = mset["axes"]
+            resolved_axes = []
+            for axis in axes:
+                resolved_axes.append(resolve_axis(structure, axis))
+            mset["axes"] = resolved_axes
+
 def get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
     if molecule_sets is None:
         molecule_sets = []
     modes = get_modes(structure)
     projectors = []
+    resolve_axes(structure, molecule_sets)
     if trans:
         molecule_sets = [{"indices": list(range(len(structure.sites))), "trans": True, "rot": False}] + molecule_sets
     if rot:
