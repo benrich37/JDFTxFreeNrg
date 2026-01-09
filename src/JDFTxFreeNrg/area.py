@@ -6,6 +6,9 @@ from scipy.spatial.transform import Rotation as R
 
 
 def get_box_area(rs: list[float], centers: list[np.ndarray], n_rotations: int = 50):
+    """
+        TODO: Write a docustring!
+    """
     # Generate uniformly distributed rotations using the Fibonacci sphere method
     idcs = np.arange(0, n_rotations, dtype=float) + 0.5
     phi = np.arccos(1 - 2*idcs/n_rotations)
