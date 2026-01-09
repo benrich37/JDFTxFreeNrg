@@ -1,6 +1,10 @@
 import numpy as np
 from JDFTxFreeNrg._common import dagger, invsqrt
 
+"""
+Collections of functions to orthogonalize sets of vectors and projectors
+"""
+
 def remove_parallel_vectors(vectors: list[np.ndarray], cutoff: float = 1e-4) -> list[np.ndarray]:
     parallel_pairs = []
     for i, vec in enumerate(vectors):

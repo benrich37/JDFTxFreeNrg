@@ -8,6 +8,10 @@ import warnings
 # Band-aid until I fix a UserWarning about `JDFTXOutfile` structure's having partially filled site properties
 warnings.filterwarnings('ignore', category=UserWarning)
 
+"""
+Functions for computing volumes of structures based on union of atomic spheres
+"""
+
 
 def get_pyvol_spheres_volume(
         rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000, grid_spacing: float | None = None) -> float:

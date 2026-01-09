@@ -1,5 +1,9 @@
 import numpy as np
 
+"""
+Contains direct translations of functions written originally in JDFTx that are called in JDFTx's vibrations module
+"""
+
 def dagger(mat: np.ndarray) -> np.ndarray:
     return mat.conj().T
 def invsqrt(mat: np.ndarray) -> np.ndarray:
