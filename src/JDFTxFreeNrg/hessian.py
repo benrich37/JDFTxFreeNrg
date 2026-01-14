@@ -106,11 +106,32 @@ def get_reduced_structure(structure):
     return reduced_structure
 
 def solve_vib_modes(structure: Structure, K_proj: np.ndarray):
+    """ Solve for vibrational modes with a cleaned Hessian.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        K_proj (np.ndarray): Hessian matrix
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: eigenvalues and eigenvectors of Hessian converted to mass-weighted coordinates
+    """
     omegaSq = get_omegaSq(structure, K_proj)
     omegaSqEigs, omegaSqEvecs = np.linalg.eigh(omegaSq)
     return omegaSqEigs, omegaSqEvecs
 
-def solve_vib_modes2(structure: Structure, K_proj: np.ndarray):
+def solve_vib_modes_debug(structure: Structure, K_proj: np.ndarray):
+    """ Solve for vibrational modes with a cleaned Hessian.
+
+    Behaves like solve_vib_modes, but also returns the eigenvectors of the Hessian in normal coordinates as the third return value.
+    This is useful for deducing which degrees of freedom need to be projected out to eliminate spurious imaginary modes. 
+
+    Args:
+        structure (Structure): pymatgen Structure
+        K_proj (np.ndarray): Hessian matrix
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray]: eigenvalues and eigenvectors of Hessian converted to mass-weighted coordinates, and eigenvectors of the Hessian in normal coordinates
+    """
     omegaSq = get_omegaSq(structure, K_proj)
     omegaSqEigs, omegaSqEvecs = np.linalg.eigh(omegaSq)
     _, evecs = np.linalg.eigh(K_proj)

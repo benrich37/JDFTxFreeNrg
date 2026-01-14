@@ -1,5 +1,5 @@
 import numpy as np
-from JDFTxFreeNrg.volume import get_mesh_spheres_volume, get_monte_carlo_spheres_volume, get_pyvista_spheres_volume, get_pyvol_spheres_volume
+from JDFTxFreeNrg.volume import get_mesh_spheres_volume, get_monte_carlo_spheres_volume, get_pyvol_spheres_volume
 from JDFTxFreeNrg.solv_entropy import get_vcav, eff_volume, _get_solv_entropy_trans
 import matplotlib.pyplot as plt
 import timeit
@@ -129,12 +129,6 @@ def time_mc_spheres_volume(rs: list[float], centers: list[np.ndarray], npoints: 
     code_snippet = f'time_fn()'
     return timeit.timeit(code_snippet, globals={"time_fn": time_fn}, number=runs)
 
-def time_pyvista_spheres_volume(rs: list[float], centers: list[np.ndarray], nslices: int = 100, runs=5):
-    def time_fn():
-        get_pyvista_spheres_volume(rs, centers, nslices=nslices)
-    code_snippet = f'time_fn()'
-    return timeit.timeit(code_snippet, globals={"time_fn": time_fn}, number=runs)
-
 def time_pyvol_spheres_volume(rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000, runs=5):
     def time_fn():
         get_pyvol_spheres_volume(rs, centers, ncubes=ncubes)
@@ -164,17 +158,6 @@ def get_mc_volume_samples(rs: list[float], centers: list[np.ndarray], nsampless:
             v_mcs.append(v_mc)
             unc_mcs.append(sem_mc*zscore)
     return v_mcs, t_mcs, unc_mcs
-
-def get_pyvista_volume_samples(rs: list[float], centers: list[np.ndarray], nsampless: list[int], time_only: bool = False, nruns: int = 1):
-    v_pvs = []
-    t_pvs = []
-    for ns in nsampless:
-        t_pv = time_pyvista_spheres_volume(rs, centers, nslices=int(ns), runs=nruns)
-        t_pvs.append(t_pv)
-        if not time_only:
-            v_pv = get_pyvista_spheres_volume(rs, centers, nslices=int(ns))
-            v_pvs.append(v_pv)
-    return v_pvs, t_pvs
 
 def get_pyvol_volume_samples(rs: list[float], centers: list[np.ndarray], ncubess: list[float], time_only: bool = False):
     v_pvs = []
@@ -388,7 +371,7 @@ def test_generic(
         )
     return fig, ax
 
-def test_single_sphere_volume(r: float | None = None, center: np.ndarray | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 15., pyvol_sample_scale = 5000):
+def test_single_sphere_volume(r: float | None = None, center: np.ndarray | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvol_sample_scale = 5000):
     rs, centers = ensure_random_spheres(None if r is None else [r], None if center is None else [center], num_spheres=1)
     r = rs[0]
     center = centers[0]
@@ -411,7 +394,7 @@ def test_single_sphere_volume(r: float | None = None, center: np.ndarray | None 
     fig.tight_layout()
     plt.show()
 
-def test_double_sphere_volume(rs: list[float] | None = None, centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 0.5, pyvol_sample_scale = 3000.):
+def test_double_sphere_volume(rs: list[float] | None = None, centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvol_sample_scale = 3000.):
     rs, centers = ensure_random_spheres(rs, centers, num_spheres=2)
     if nsampless is None:
         nsampless = [1e3, 1e4, 1e5]
@@ -432,7 +415,7 @@ def test_double_sphere_volume(rs: list[float] | None = None, centers: list[np.nd
     fig.tight_layout()
     plt.show()
 
-def test_vcav(solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, solute_rs: list[float] | None = None, solute_centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 0.5, pyvol_sample_scale = 3000., na_solute: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0):
+def test_vcav(solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, solute_rs: list[float] | None = None, solute_centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvol_sample_scale = 3000., na_solute: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0):
     solvent_rs, solvent_centers = ensure_random_spheres(solvent_rs, solvent_centers, num_spheres=na_solvent)
     solute_rs, solute_centers = ensure_random_spheres(solute_rs, solute_centers, num_spheres=na_solute)
     # Solvent molecules with greater free space will have errors effectively muted out
@@ -460,7 +443,7 @@ def test_vcav(solvent_rs: list[float] | None = None, solvent_centers: list[np.nd
     plt.show()
 
 
-def test_eff_volume(solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, solute_rs: list[float] | None = None, solute_centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvista_sample_scale: float = 0.5, pyvol_sample_scale = 3000., na_solute: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0):
+def test_eff_volume(solvent_rs: list[float] | None = None, solvent_centers: list[np.ndarray] | None = None, solute_rs: list[float] | None = None, solute_centers: list[np.ndarray] | None = None, nsampless: list[int] | None = None, mesh_sample_scale: float = 150., pyvol_sample_scale = 3000., na_solute: int = 2, na_solvent: int = 2, scale_free_volume: float = 2.0):
     solvent_rs, solvent_centers = ensure_random_spheres(solvent_rs, solvent_centers, num_spheres=na_solvent)
     solute_rs, solute_centers = ensure_random_spheres(solute_rs, solute_centers, num_spheres=na_solute)
     # Solvent molecules with greater free space will have errors effectively muted out

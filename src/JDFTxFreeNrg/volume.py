@@ -25,33 +25,6 @@ def get_pyvol_spheres_volume(
     else:
         dstep = (vol_tot / float(ncubes)) ** (1/3)
     return volume_from_spheres(centers, rs, grid_spacing=dstep)
-    
-    
-def get_pyvista_spheres_volume(
-        rs: list[float], centers: list[np.ndarray], nslices: int = 900):
-    """ Returns the mesh-integrated volume of union of spheres
-
-    Args:
-        rs (list[float]): Radii of each sphere
-        centers (list[np.ndarray]): Center of each sphere
-        ncubes (int): Approximate number of cubes used in integration
-
-    Returns:
-        float: Mesh-integrated volume
-    """
-    import pyvista as pv
-    # dangle = int(nslices/((len(rs)) * 2))
-    dangle = max(int(nslices/(2)), 10)
-    print(f"Using {dangle} theta/phi resolution for PyVista {len(rs)} spheres")
-    spheres = pv.Sphere(radius=rs[0], center=centers[0], theta_resolution=dangle, phi_resolution=dangle)
-    spheres = spheres.triangulate()
-    for r, c in zip(rs[1:], centers[1:]):
-        sphere = pv.Sphere(radius=r, center=c, theta_resolution=dangle, phi_resolution=dangle)
-        sphere = sphere.triangulate()
-        spheres = spheres.boolean_union(sphere)
-        spheres = spheres.triangulate()
-    vol = spheres.volume
-    return vol
 
 def get_mesh_spheres_volume(
         rs: list[float], centers: list[np.ndarray], ncubes: int = 1000000, grid_spacing: float | None = None) -> float:
@@ -234,6 +207,10 @@ class StructureVolume(Structure):
         idcs = sorted(idcs)
         substructure = Structure.from_sites(
             [self[i] for i in range(len(self.sites)) if i in idcs])
+        if npoints is None and self.method == "MC":
+            npoints = self.npoint_default
+        if grid_spacing is None and self.method != "MC":
+            grid_spacing = self.grid_spacing_default
         vol = get_vdw_volume(substructure, npoints=npoints, method=self.method, grid_spacing=grid_spacing)
         if self.cache is not None:
             if self.method not in self.cache:
