@@ -6,7 +6,6 @@ from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from pymatgen.io.jdftx.inputs import JDFTXInfile
 from pymatgen.core.structure import Structure
 from pathlib import Path
-import pyvista as pv
 from JDFTxFreeNrg.volume import StructureVolume, get_vdw_volume
 
 # liter is 0.1 m^3, A is 1e-10 m
