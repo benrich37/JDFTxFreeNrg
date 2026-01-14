@@ -234,6 +234,10 @@ class StructureVolume(Structure):
         idcs = sorted(idcs)
         substructure = Structure.from_sites(
             [self[i] for i in range(len(self.sites)) if i in idcs])
+        if npoints is None and self.method == "MC":
+            npoints = self.npoint_default
+        if grid_spacing is None and self.method != "MC":
+            grid_spacing = self.grid_spacing_default
         vol = get_vdw_volume(substructure, npoints=npoints, method=self.method, grid_spacing=grid_spacing)
         if self.cache is not None:
             if self.method not in self.cache:
