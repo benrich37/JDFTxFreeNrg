@@ -205,6 +205,9 @@ def get_solv_entropy_rot(
     S_rot += get_entropy_change_tr_from_rotation(structure, vm, vf, T)
     return S_rot
 
+# TODO: While this argument signature is the most efficient since these terms are used in other expressions, they may not be immediately user friendly.
+# We possibly should make this version of the function a private function, and make a more user-friendly public function
+# that computed vm, vs, and vf from more intuitive inputs.
 def get_solv_entropy_trans(
         structure: Structure, vm: float, vs: float, vf: float, T: float, d: int = 3
     ) -> float:
