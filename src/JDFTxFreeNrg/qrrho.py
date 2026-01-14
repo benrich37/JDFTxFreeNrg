@@ -129,7 +129,7 @@ def get_rrho_mixing(freq: float | np.ndarray, freq0: float = 200, alpha: float =
 QRRHO
 """
 
-def get_qrrho_vib_enthalpies(freqs: np.ndarray | float, T: float = 300., sep_zpe: bool = True, freq0: float = 100, alpha: float = 4.) -> float:
+def get_qrrho_vib_enthalpies(freqs: np.ndarray | float, T: float = 300., sep_zpe: bool = False, freq0: float = 100, alpha: float = 4.) -> float:
     """ Return the QRHHO vibrational enthalpy in eV
 
     Args:
@@ -156,6 +156,21 @@ def get_qrrho_vib_enthalpies(freqs: np.ndarray | float, T: float = 300., sep_zpe
         As_ho *= mixs
     return (As_rr + As_ho) * kb_and_j_to_eV
 
+
+def get_qrrho_vib_enthalpy(freqs: np.ndarray | float, T: float = 300., sep_zpe: bool = False, freq0: float = 100, alpha: float = 4.) -> float:
+    """ Return the QRHHO vibrational enthalpy in eV
+
+    Args:
+        freqs (float): A frequency in cm^-1
+        T (float): temperature in K
+        freq0 (float): threshold frequency in cm^-1
+        alpha (float): parameter controlling the sharpness of the transition
+
+    Returns:
+        float: QRRHO vibrational enthalpy in eV
+    """
+    return np.sum(get_qrrho_vib_enthalpies(freqs, T, sep_zpe, freq0, alpha))
+
 def get_qrrho_vib_entropies(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4) -> float:
     """ Return the QRHHO vibrational entropy in eV/K
 
@@ -174,6 +189,20 @@ def get_qrrho_vib_entropies(freqs: np.ndarray | float, T: float = 300.0, freq0: 
     Ss_ho = _get_ho_vib_entropies(vt_over_Ts)
     Ss_rr = _get_rr_vib_entropies(vt_over_Ts)
     return (((1 - mixs) * Ss_rr) + (mixs * Ss_ho)) * kb_and_j_to_eV
+
+def get_qrrho_vib_entropy(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4) -> float:
+    """ Return the QRHHO vibrational entropy in eV/K
+
+    Args:
+        freqs (float): A frequency in cm^-1
+        T (float): temperature in K
+        freq0 (float): threshold frequency in cm^-1
+        alpha (float): parameter controlling the sharpness of the transition
+
+    Returns:
+        float: QRRHO vibrational entropy in eV/K
+    """
+    return np.sum(get_qrrho_vib_entropies(freqs, T, freq0, alpha))
 
 def get_qrrho_vib_free_energies(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = True) -> float:
     """ Return the QRHHO vibrational Helmholtz free energy in eV
@@ -204,3 +233,18 @@ def get_qrrho_vib_free_energies(freqs: np.ndarray | float, T: float = 300.0, fre
         As_ho += __get_ho_vib_enthalpies(vt_over_Ts, T=T)
         As_ho *= mixs
     return (As_rr + As_ho) * kb_and_j_to_eV
+
+
+def get_qrrho_vib_free_energy(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = True) -> float:
+    """ Return the QRHHO vibrational Helmholtz free energy in eV
+
+    Args:
+        freqs (float): A frequency in cm^-1
+        T (float): temperature in K
+        freq0 (float): threshold frequency in cm^-1
+        alpha (float): parameter controlling the sharpness of the transition
+
+    Returns:
+        float: QRRHO vibrational Helmholtz free energy in eV
+    """
+    return np.sum(get_qrrho_vib_free_energies(freqs, T, freq0, alpha, sep_zpe))
