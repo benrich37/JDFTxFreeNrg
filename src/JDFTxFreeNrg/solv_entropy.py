@@ -1,12 +1,7 @@
-import json
 import numpy as np
 import scipy.constants as const
 from JDFTxFreeNrg.standard import get_q_rot, check_is_linear, get_entropy_trans, _get_entropy_rot
-from pymatgen.io.jdftx.outputs import JDFTXOutfile
-from pymatgen.io.jdftx.inputs import JDFTXInfile
 from pymatgen.core.structure import Structure
-from pathlib import Path
-from JDFTxFreeNrg.volume import StructureVolume, get_vdw_volume
 
 # liter is 0.1 m^3, A is 1e-10 m
 molarity_to_part_per_A3 = const.Avogadro/(((0.1**3))/((1e-10)**3))
@@ -316,8 +311,6 @@ def get_mol_geometry_factor(sa_solute: float, sa_solvent: float, box_sa_solute: 
     phi_solv = sa_solvent / box_sa_solvent
     phi_solute = sa_solute / box_sa_solute
     return (sa_solute * phi_solv) / (sa_solvent * phi_solute)
-
-
 
 def get_solv_entropy_cav_acc_factor_approx():
     return get_Sc0(vol_solute, vol_solvent, solvent_molarity) - get_mol_geometry_factor()*(get_deltaS_gas_sol() + k_ev * omega * 5.365)
