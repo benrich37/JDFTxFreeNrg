@@ -84,6 +84,7 @@ def get_q_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
         2 * np.pi * si_mass * const.k * T / const.h**2
     )**(d/2)
 
+# TODO: Should vol be an optional argument that defaults to ideal gas volume at 1 atm? And also add an argument for pressure?
 def get_entropy_trans(mass: float, T: float, vol: float, d: int = 3) -> float:
     """Returns the translational entropy in eV/K.
 
