@@ -204,7 +204,7 @@ def get_qrrho_vib_entropy(freqs: np.ndarray | float, T: float = 300.0, freq0: fl
     """
     return np.sum(get_qrrho_vib_entropies(freqs, T, freq0, alpha))
 
-def get_qrrho_vib_free_energies(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = True) -> float:
+def get_qrrho_vib_free_energies(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = False) -> float:
     """ Return the QRHHO vibrational Helmholtz free energy in eV
 
     Args:
@@ -235,7 +235,7 @@ def get_qrrho_vib_free_energies(freqs: np.ndarray | float, T: float = 300.0, fre
     return (As_rr + As_ho) * kb_and_j_to_eV
 
 
-def get_qrrho_vib_free_energy(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = True) -> float:
+def get_qrrho_vib_free_energy(freqs: np.ndarray | float, T: float = 300.0, freq0: float = 100., alpha: float = 4, sep_zpe: bool = False) -> float:
     """ Return the QRHHO vibrational Helmholtz free energy in eV
 
     Args:
