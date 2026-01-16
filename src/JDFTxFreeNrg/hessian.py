@@ -163,7 +163,7 @@ def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict
     K = get_projected_K(structure, read_K(calc_dir, structure, expand_to_full=True), trans = not fixed, rot = not fixed, molecule_sets=molecule_sets, reverse=reverse)
     K = reduce_K(K, structure)
     substructure = get_reduced_structure(structure)
-    omegaSqEigs, omegaSqEvecs, evecs = solve_vib_modes2(substructure, K)
+    omegaSqEigs, omegaSqEvecs, evecs = solve_vib_modes_debug(substructure, K)
     return omegaSqEigs, omegaSqEvecs, evecs
 
 

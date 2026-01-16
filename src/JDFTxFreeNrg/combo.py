@@ -4,7 +4,8 @@ import numpy as np
 from pymatgen.core.structure import Structure
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from JDFTxFreeNrg.hessian import get_freqs_cm_from_calc_dir, print_freqs
-from JDFTxFreeNrg.solv_entropy import get_vfree, get_solv_entropy_rot, get_solv_entropy_trans, StructureVolume
+from JDFTxFreeNrg.solv_entropy import get_vfree, get_solv_entropy_rot, get_solv_entropy_trans
+from JDFTxFreeNrg.volume import StructureVolume
 from JDFTxFreeNrg.standard import get_enthalpy_rot, get_enthalpy_trans, get_entropy_rot, get_ideal_gas_vol, get_entropy_trans, k_ev
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_enthalpies, get_qrrho_vib_entropies
 
