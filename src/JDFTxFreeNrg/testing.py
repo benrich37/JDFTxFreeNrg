@@ -3,6 +3,12 @@ from JDFTxFreeNrg.volume import get_mesh_spheres_volume, get_monte_carlo_spheres
 from JDFTxFreeNrg.solv_entropy import get_vcav, eff_volume, _get_solv_entropy_trans
 import matplotlib.pyplot as plt
 import timeit
+from pathlib import Path
+import zipfile
+import requests
+import inspect
+from os import remove
+import pickle
 
 def anl_spheres_area(rs: list[float], centers: list[np.ndarray]) -> float:
     assert len(rs) == len(centers), "Number of radii must match number of centers."
@@ -545,9 +551,40 @@ def test_relative_solve_entropy_trans(
     )
     plt.show()
 
+def getcwd2():
+    return Path(inspect.stack()[-1].filename).parent
 
+def download_freesolv_data(version='0.51'):
+    data_path = Path(getcwd2()) / 'data'
+    data_path.mkdir(parents=True, exist_ok=True)
+    zip_file_path = data_path / f'FreeSolv-{version}.zip'
+    r = requests.get(
+        f'https://escholarship.org/content/qt6sd403pz/supp/FreeSolv-{version}.zip', 
+        allow_redirects=True, 
+        # I do not like having to pretend to be a browser, but the server seems to block non-browser user agents
+        # headers={'User-Agent': 'JDFTxFreeNrg/1.0'}
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        )
+    with open(zip_file_path, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            f.write(chunk)
+    with open(zip_file_path, 'rb') as f:
+        with zipfile.ZipFile(f) as zf:
+            zf.extractall(path=data_path)
+    remove(zip_file_path)
 
+def get_freesolv_pickle(version='0.51', rel_path = Path("database.pickle")):
+    data_path = Path(getcwd2()) / 'data' / f'FreeSolv-{version}'
+    pickle_file_path = data_path / rel_path
+    if not pickle_file_path.exists():
+        download_freesolv_data(version=version)
+    return pickle_file_path
 
+def get_freesolv_database(version='0.51'):
+    pickle_file_path = get_freesolv_pickle(version=version, rel_path = Path("database.pickle"))
+    with open(pickle_file_path, 'rb') as f:
+        database = pickle.load(f, encoding='latin1')
+    return database
 # nsampless = [1e3, 2e3, 3e3]
 # test_single_sphere_volume(nsampless=nsampless)
 # test_double_sphere_volume(nsampless=nsampless)
