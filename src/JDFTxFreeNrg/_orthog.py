@@ -1,22 +1,25 @@
 import numpy as np
-from JDFTxFreeNrg._common import dagger, invsqrt
+from JDFTxFreeNrg._common import dagger, invsqrt, _error_on_nan_in_list_of_floats, _error_on_nan_in_list_of_vectors
 
 """
 Collections of functions to orthogonalize sets of vectors and projectors
 """
 
+
+
 def remove_parallel_vectors(vectors: list[np.ndarray], cutoff: float = 1e-4) -> list[np.ndarray]:
     try:
-        return _remove_parallel_vectors(vectors, cutoff=cutoff)
+        vectors = _remove_parallel_vectors(vectors, cutoff=cutoff)
+        _error_on_nan_in_list_of_vectors(vectors, context="after running remove_parallel_vectors")
     except Exception as e:
-        print(f"Error in removing parallel vectors for vectors: {vectors}\n")
-        print("Error:\n")
+        print(f"Error in removing parallel vectors")
         raise e
 
 def _remove_parallel_vectors(vectors: list[np.ndarray], cutoff: float = 1e-4) -> list[np.ndarray]:
     parallel_pairs = []
     for i, vec in enumerate(vectors):
         overlaps = [abs(vec @ v) for v in vectors]
+        _error_on_nan_in_list_of_floats(overlaps, context=f"overlaps of vector index {i} with others")
         for j, o in enumerate(overlaps):
             if i != j and abs(o - 1) < cutoff:
                 parallel_pairs.append((min(i, j), max(i, j)))
@@ -30,10 +33,10 @@ def _remove_parallel_vectors(vectors: list[np.ndarray], cutoff: float = 1e-4) ->
 
 def orthogonalize_vector_set_step(vectors: list[np.ndarray], idx: int, cutoff: float = 1e-4) -> list[np.ndarray]:
     try:
-        return _orthogonalize_vector_set_step(vectors, idx, cutoff=cutoff)
+        vectors = _orthogonalize_vector_set_step(vectors, idx, cutoff=cutoff)
+        _error_on_nan_in_list_of_vectors(vectors, context=f"after orthogonalizing vector set at index {idx}")
     except Exception as e:
-        print(f"Error in orthogonalizing vector set at index {idx} for vectors: {vectors}\n")
-        print("Error:\n")
+        print(f"Error in orthogonalizing vector set at index {idx}")
         raise e
 
 def _orthogonalize_vector_set_step(vectors: list[np.ndarray], idx: int, cutoff: float = 1e-4) -> list[np.ndarray]:
@@ -55,8 +58,7 @@ def remove_parallel_vectors_loop(vectors: list[np.ndarray], cutoff: float = 1e-4
     try:
         return _remove_parallel_vectors_loop(vectors, cutoff=cutoff, maxstep=maxstep)
     except Exception as e:
-        print(f"Error in running remove_parallel_vectors_loop for vectors: {vectors}\n")
-        print("Error:\n")
+        print(f"Error in running remove_parallel_vectors_loop")
         raise e
 
 def _remove_parallel_vectors_loop(vectors: list[np.ndarray], cutoff: float = 1e-4, maxstep: int = 10) -> list[np.ndarray]:
@@ -84,8 +86,7 @@ def orthogonalize_projector(projector1):
     try:
         return _orthogonalize_projector(projector1)
     except Exception as e:
-        print(f"Error in orthogonalizing projector: {projector1}\n")
-        print("Error:\n")
+        print(f"Error in orthogonalizing projector: {projector1}")
         raise e
 
 def _orthogonalize_projector(projector1):
@@ -96,8 +97,7 @@ def progressively_orthogonalize_vectors(vectors: list[np.ndarray]) -> list[np.nd
     try:
         return _progressively_orthogonalize_vectors(vectors)
     except Exception as e:
-        print(f"Error in progressively orthogonalizing vectors: {vectors}\n")
-        print("Error:\n")
+        print(f"Error in progressively orthogonalizing vectors: {vectors}")
         raise e
 
 

@@ -1,6 +1,6 @@
 
 from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector
-from JDFTxFreeNrg._common import dagger, box, dot, remove_phase
+from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array
 import numpy as np
 from pymatgen.core.structure import Structure, Molecule
 from pymatgen.core.units import bohr_to_ang
@@ -155,6 +155,7 @@ def get_rotations_molecule(
         for i, mode in enumerate(modes):
             if mode.iAtom in mol_indices:
                 vec[i] = box(modes[i].n, axis.T, CMcoords[mol_indices.index(modes[i].iAtom)])
+        _error_on_nan_in_array(np.array(vec), context=f"rotation projector for axis {j}")
         projectors.append(vec)
     if ortho:
         projectors = orthogonalize_projector(np.array(projectors).T)
@@ -192,6 +193,21 @@ def get_projector_raw(structure: Structure, trans = True, rot = True, print_remo
     except Exception as e:
         print("Error in constructing raw projector:")
         raise e
+    
+def _get_clean_mol_set(mol_set: dict) -> dict:
+    clean_set = {}
+    clean_set['indices'] = mol_set.get("indices", [])
+    if any([clean_set['indices'] is None, len(clean_set['indices']) == 0]):
+        raise ValueError("molecule set must have non-empty 'indices' list")
+    clean_set['trans'] = mol_set.get("trans", False)
+    clean_set['rot'] = mol_set.get("rot", False)
+    if all ([not clean_set["trans"], not clean_set["rot"]]):
+        raise ValueError("molecule set must have at least one of 'trans' or 'rot' set to True")
+    clean_set['center'] = mol_set.get("center", None)
+    clean_set['axes'] = mol_set.get("axes", None)
+    if any([clean_set['axes'] is None, len(clean_set['axes']) == 0]):
+        raise ValueError("molecule set must have non-empty 'axes' list. (Use [\"x\",\"y\",\"z\"] for standard axes.)")
+    clean_set['ortho'] = mol_set.get("ortho", True)
 
 def _get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
     if molecule_sets is None:
@@ -204,18 +220,13 @@ def _get_projector_raw(structure: Structure, trans = True, rot = True, print_rem
     if rot:
         molecule_sets = [{"indices": list(range(len(structure.sites))), "trans": False, "rot": True}] + molecule_sets
     for i, mol_set in enumerate(molecule_sets):
-        mol_indices = mol_set['indices']
+        clean_set = _get_clean_mol_set(mol_set)
         mol_structure = structure.copy()
-        mol_structure.remove_sites([i for i in range(len(structure.sites)) if i not in mol_indices])
-        mol_trans = mol_set.get("trans", False)
-        mol_rot = mol_set.get("rot", False)
-        center = mol_set.get("center", None)
-        axes = mol_set.get("axes", None)
-        ortho = mol_set.get("ortho", True)
-        if mol_trans:
-            projectors += get_translations_molecule(modes, mol_indices, axes=axes)
-        if mol_rot:
-            projectors += get_rotations_molecule(modes, mol_structure, mol_indices, center=center, axes=axes, ortho=ortho)
+        mol_structure.remove_sites([i for i in range(len(structure.sites)) if i not in clean_set["indices"]])
+        if clean_set["trans"]:
+            projectors += get_translations_molecule(modes, clean_set["indices"], axes=clean_set["axes"])
+        if clean_set["rot"]:
+            projectors += get_rotations_molecule(modes, mol_structure, clean_set["indices"], center=clean_set["center"], axes=clean_set["axes"], ortho=clean_set["ortho"])
     projector = np.array(projectors).T
     norm_projector = projector / np.linalg.norm(projector, axis=0)
     return norm_projector
@@ -226,6 +237,8 @@ def get_projector(structure: Structure, trans = True, rot = True, molecule_sets:
     vectors = [v for v in projector_raw.T]
     vectors = remove_parallel_vectors_loop(vectors, cutoff=1e-4)
     projector = np.array(vectors).T
+    if np.isnan(projector).any():
+        raise ValueError("NaN detected in projector after removing parallel vectors.")
     return projector
 
 
