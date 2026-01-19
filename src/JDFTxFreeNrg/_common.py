@@ -59,3 +59,29 @@ def remove_phase(N: int, vec: np.ndarray, threshold: float = 1e-300) -> np.ndarr
         vec[i] = c.real
     rmsImagErr = sqrt(imSqSum/(imSqSum + reSqSum))
     return vec
+
+
+def _nan_in_list_of_vectors_detector(vectors: list[np.ndarray]):
+    nan_idcs = [i for i, v in enumerate(vectors) if np.isnan(v).any()]
+    return nan_idcs
+
+def _error_on_nan_in_list_of_vectors(vectors: list[np.ndarray], context: str = ""):
+    nan_idcs = _nan_in_list_of_vectors_detector(vectors)
+    if len(nan_idcs) > 0:
+        raise ValueError(f"NaN detected in indices {nan_idcs} of vector list {context}.")
+    
+def _nan_in_list_of_floats_detector(floats: list):
+    nan_idcs = [i for i, v in enumerate(floats) if np.isnan(v)]
+    return nan_idcs
+
+def _error_on_nan_in_list_of_floats(floats: list, context: str = ""):
+    nan_idcs = _nan_in_list_of_vectors_detector(floats)
+    if len(nan_idcs) > 0:
+        raise ValueError(f"NaN detected in indices {nan_idcs} of float list {context}.")
+    
+def _nan_in_array_detector(arr: np.ndarray):
+    return np.isnan(arr).any()
+
+def _error_on_nan_in_array(arr: np.ndarray, context: str = ""):
+    if _nan_in_array_detector(arr):
+        raise ValueError(f"NaN detected in array {context}.")

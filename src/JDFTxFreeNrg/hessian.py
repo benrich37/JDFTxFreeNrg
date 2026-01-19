@@ -44,9 +44,9 @@ def freq_nrg_to_cm(freqs: np.ndarray) -> np.ndarray:
     return freqs * nrg_to_cm_conv  # Hartree to cm^-1
 
 
-def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, trans = True, rot = True, print_removal: bool = True, reverse: bool = False) -> np.ndarray:
+def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, reverse: bool = False) -> np.ndarray:
     # TODO: Protect reverse from being fed an empty projector
-    projector = get_projector(structure, trans=trans, rot=rot, molecule_sets=molecule_sets, print_removal=print_removal)
+    projector = get_projector(structure, molecule_sets=molecule_sets)
     if reverse:
         K_proj = project_on_subspace(K, projector)
     else:
@@ -159,8 +159,9 @@ def get_structure_for_gaussian_vib_log(structure: Structure, freqs_cm: np.ndarra
 def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False) -> tuple[np.ndarray, np.ndarray]:
     infile = JDFTXInfile.from_file(calc_dir / "in")
     structure = infile.structure
+    # This is vestigial from when "trans" and "rot" args were present for "get_projected_K" - should we still do something with this?
     fixed = (len(get_free_idcs(structure)) != len(structure))
-    K = get_projected_K(structure, read_K(calc_dir, structure, expand_to_full=True), trans = not fixed, rot = not fixed, molecule_sets=molecule_sets, reverse=reverse)
+    K = get_projected_K(structure, read_K(calc_dir, structure, expand_to_full=True), molecule_sets=molecule_sets, reverse=reverse)
     K = reduce_K(K, structure)
     substructure = get_reduced_structure(structure)
     omegaSqEigs, omegaSqEvecs, evecs = solve_vib_modes_debug(substructure, K)
@@ -169,7 +170,6 @@ def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict
 
 
 def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, use_in: bool = True, trim_zero: bool = True, zero_thresh: float = 2e-17,
-                                  proj_trans: bool | None = None, proj_rot: bool | None = None
                                   ) -> tuple[np.ndarray, np.ndarray]:
     # 2e-17 approximately corresponds to 1e-3 cm^-1
     if use_in:
@@ -184,7 +184,7 @@ def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | No
     K = get_projected_K(
         structure, 
         read_K(calc_dir, structure, expand_to_full=True), 
-        trans = proj_trans, rot = proj_rot, molecule_sets=molecule_sets, reverse=reverse
+        molecule_sets=molecule_sets, reverse=reverse
         )
     K = reduce_K(K, structure)
     substructure = get_reduced_structure(structure)
@@ -193,7 +193,6 @@ def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | No
     return omegaSqEigs
 
 def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, use_in: bool = True, trim_zero: bool = True, zero_thresh: float = 1e-1,
-                               proj_trans: bool | None = None, proj_rot: bool | None = None
                                ) -> np.ndarray:
     _zero_thresh = (zero_thresh / nrg_to_cm_conv)**2
     omegaSqEigs = get_omegaSqEigs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse, use_in=use_in, trim_zero=trim_zero, zero_thresh=_zero_thresh, proj_rot=proj_rot, proj_trans=proj_trans)
