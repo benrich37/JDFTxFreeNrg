@@ -187,6 +187,13 @@ def resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
             mset["axes"] = resolved_axes
 
 def get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
+    try:
+        return _get_projector_raw(structure, trans=trans, rot=rot, print_removal=print_removal, molecule_sets=molecule_sets)
+    except Exception as e:
+        print("Error in constructing raw projector:")
+        raise e
+
+def _get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
     if molecule_sets is None:
         molecule_sets = []
     modes = get_modes(structure)
