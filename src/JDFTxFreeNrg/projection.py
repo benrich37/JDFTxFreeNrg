@@ -40,12 +40,35 @@ def get_inertia_tensor(struc: Structure):
             inertia_tensor[jj, ii] += -wt * c[jj] * c[ii]
     return inertia_tensor / (bohr_to_ang ** 2)
 
+def _get_inertia_tensor(struc: Structure):
+    """
+    Calculate the average moment of inertia of a molecule.
+
+    Args:
+        mol (Molecule): Pymatgen Molecule
+
+    Returns:
+        int, list: average moment of inertia, eigenvalues of the inertia tensor
+    """
+    mol = Molecule.from_sites(struc.sites)
+    centered_mol = mol.get_centered_molecule()
+    inertia_tensor = np.zeros((3, 3))
+    for site in centered_mol:
+        c = site.coords
+        wt = site.specie.atomic_mass
+        for dim in range(3):
+            inertia_tensor[dim, dim] += wt * (c[(dim + 1) % 3] ** 2 + c[(dim + 2) % 3] ** 2)
+        for ii, jj in [(0, 1), (1, 2), (0, 2)]:
+            inertia_tensor[ii, jj] += -wt * c[ii] * c[jj]
+            inertia_tensor[jj, ii] += -wt * c[jj] * c[ii]
+    return inertia_tensor / (bohr_to_ang ** 2)
+
 class Mode:
     def __init__(self, n: np.ndarray, iAtom: int):
         self.n = n
         self.iAtom = iAtom
 
-def get_modes(structure: Structure) -> list[Mode]:
+def _get_modes(structure: Structure) -> list[Mode]:
     modes = []
     nAtoms = len(structure.sites)
     for iAtom in range(nAtoms):
@@ -55,6 +78,13 @@ def get_modes(structure: Structure) -> list[Mode]:
             mode = Mode(vec, iAtom)
             modes.append(mode)
     return modes
+
+def get_modes(structure: Structure) -> list[Mode]:
+    try:
+        return _get_modes(structure)
+    except Exception as e:
+        print("Error in constructing modes:")
+        raise e
 
 def fill_translations(projector: np.ndarray, modes: list[Mode], i_start: int = 0):
     for k in range(3):
@@ -135,6 +165,8 @@ def get_center_of_mass(structure: Structure) -> np.ndarray:
     CM /= total_mass
     return CM
 
+# def _linear_rotation_danger(molecule_structure: Structure, mol_indices: list[int], center: np.ndarray, axes: list[np.ndarray], symmThreshold: float = 1e-5) -> bool:
+
 def get_rotations_molecule(
         modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5,
         center: np.ndarray | None = None, axes: list[np.ndarray] | None = None, ortho: bool = True
@@ -177,63 +209,129 @@ def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray) -> np
         p0 = structure.cart_coords[axis[0]]
         p1 = structure.cart_coords[axis[1]]
         return p1 - p0
+    
+def resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
+    try:
+        _resolve_idcss(structure, molecule_sets)
+    except Exception as e:
+        print(f"Error in resolving indices for molecule sets. {molecule_sets}")
+        raise e
 
+def _resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
+    for mset in molecule_sets:
+        idcs = mset.get("indices", None)
+        if idcs is None:
+            resolved_idcs = list(range(len(structure.sites)))
+        else:
+            resolved_idcs = resolve_idcs(structure, idcs)
+        mset["indices"] = resolved_idcs
+
+def resolve_idcs(structure: Structure, idcs: list[int] | str) -> None:
+    if isinstance(idcs, str):
+        if idcs == "all":
+            return list(range(len(structure.sites)))
+        else:
+            raise ValueError(f"Unknown string for indices: {idcs}")
+    else:
+        try:
+            return list([int(i) for i in idcs])
+        except Exception as e:
+            print(f"Error in resolving indices: {idcs}")
+            raise e
+    
 def resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
+    try:
+        _resolve_axes(structure, molecule_sets)
+    except Exception as e:
+        print(f"Error in resolving axes for molecule sets. {molecule_sets}")
+        raise e
+
+def _resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
     for mset in molecule_sets:
         if "axes" in mset:
             axes = mset["axes"]
-            resolved_axes = []
-            for axis in axes:
-                resolved_axes.append(resolve_axis(structure, axis))
+            if axes is None:
+                resolved_axes = None
+            else:
+                resolved_axes = []
+                for axis in axes:
+                    resolved_axes.append(resolve_axis(structure, axis))
             mset["axes"] = resolved_axes
 
-def get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
+def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
     try:
-        return _get_projector_raw(structure, trans=trans, rot=rot, print_removal=print_removal, molecule_sets=molecule_sets)
+        return _get_projector_raw(structure, molecule_sets=molecule_sets)
     except Exception as e:
         print("Error in constructing raw projector:")
         raise e
     
+def get_clean_mol_set(mol_set: dict) -> dict:
+    try:
+        return _get_clean_mol_set(mol_set)
+    except Exception as e:
+        print(f"Error in cleaning molecule set: {mol_set}")
+        raise e
+
 def _get_clean_mol_set(mol_set: dict) -> dict:
     clean_set = {}
-    clean_set['indices'] = mol_set.get("indices", [])
-    if any([clean_set['indices'] is None, len(clean_set['indices']) == 0]):
-        raise ValueError("molecule set must have non-empty 'indices' list")
+    clean_set['indices'] = mol_set.get("indices", None)
+    if (clean_set['indices'] is None) or (isinstance(clean_set["indices"], list) and len(clean_set['indices']) == 0):
+        raise ValueError("molecule set must have non-empty 'indices' list. (Use 'all' to select all atoms.)")
     clean_set['trans'] = mol_set.get("trans", False)
     clean_set['rot'] = mol_set.get("rot", False)
     if all ([not clean_set["trans"], not clean_set["rot"]]):
         raise ValueError("molecule set must have at least one of 'trans' or 'rot' set to True")
     clean_set['center'] = mol_set.get("center", None)
     clean_set['axes'] = mol_set.get("axes", None)
-    if any([clean_set['axes'] is None, len(clean_set['axes']) == 0]):
-        raise ValueError("molecule set must have non-empty 'axes' list. (Use [\"x\",\"y\",\"z\"] for standard axes.)")
+    # if (clean_set['axes'] is not None) or (isinstance(clean_set['axes'], list) and len(clean_set['axes']) == 0):
+    if (isinstance(clean_set['axes'], list) and len(clean_set['axes']) == 0):
+        raise ValueError("molecule set must have non-empty 'axes' list. (Use [\"x\",\"y\",\"z\"] for standard axes, or leave as None/missing to auto-generate based on inertia tensor.)")
     clean_set['ortho'] = mol_set.get("ortho", True)
+    return clean_set
 
-def _get_projector_raw(structure: Structure, trans = True, rot = True, print_removal: bool = True, molecule_sets: list[dict] | None = None) -> np.ndarray:
+def _append_projectors_mol_set(projectors: list[np.ndarray], modes: list[Mode], structure: Structure, mol_set: dict):
+    clean_set = get_clean_mol_set(mol_set)
+    projectors = _append_projectors_mol_set_trans(projectors, modes, clean_set)
+    projectors = _append_projectors_mol_set_rot(projectors, modes, clean_set, structure)
+    return projectors
+
+def _append_projectors_mol_set_trans(projectors: list[np.ndarray], modes: list[Mode], clean_set: dict):
+    if clean_set["trans"]:
+        try:
+            projectors += get_translations_molecule(modes, clean_set["indices"], axes=clean_set["axes"])
+        except Exception as e:
+            print(f"Error in getting translation projectors for molecule set: {clean_set}")
+            raise e
+    return projectors
+
+def _append_projectors_mol_set_rot(projectors: list[np.ndarray], modes: list[Mode], clean_set: dict, structure: Structure):
+    if clean_set["rot"]:
+        try:
+            mol_structure = structure.copy()
+            mol_structure.remove_sites([i for i in range(len(structure.sites)) if i not in clean_set["indices"]])
+            projectors += get_rotations_molecule(modes, mol_structure, clean_set["indices"], center=clean_set["center"], axes=clean_set["axes"], ortho=clean_set["ortho"])
+        except Exception as e:
+            print(f"Error in getting rotation projectors for molecule set: {clean_set}")
+            raise e
+    return projectors
+
+
+def _get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
     if molecule_sets is None:
         molecule_sets = []
     modes = get_modes(structure)
     projectors = []
+    resolve_idcss(structure, molecule_sets)
     resolve_axes(structure, molecule_sets)
-    if trans:
-        molecule_sets = [{"indices": list(range(len(structure.sites))), "trans": True, "rot": False}] + molecule_sets
-    if rot:
-        molecule_sets = [{"indices": list(range(len(structure.sites))), "trans": False, "rot": True}] + molecule_sets
     for i, mol_set in enumerate(molecule_sets):
-        clean_set = _get_clean_mol_set(mol_set)
-        mol_structure = structure.copy()
-        mol_structure.remove_sites([i for i in range(len(structure.sites)) if i not in clean_set["indices"]])
-        if clean_set["trans"]:
-            projectors += get_translations_molecule(modes, clean_set["indices"], axes=clean_set["axes"])
-        if clean_set["rot"]:
-            projectors += get_rotations_molecule(modes, mol_structure, clean_set["indices"], center=clean_set["center"], axes=clean_set["axes"], ortho=clean_set["ortho"])
+        projectors = _append_projectors_mol_set(projectors, modes, structure, mol_set)
     projector = np.array(projectors).T
     norm_projector = projector / np.linalg.norm(projector, axis=0)
     return norm_projector
 
 
-def get_projector(structure: Structure, trans = True, rot = True, molecule_sets: list[dict] | None = None, print_removal: bool = True) -> np.ndarray:
-    projector_raw = get_projector_raw(structure, trans=trans, rot=rot, molecule_sets=molecule_sets, print_removal=print_removal)
+def get_projector(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
+    projector_raw = get_projector_raw(structure, molecule_sets=molecule_sets)
     vectors = [v for v in projector_raw.T]
     vectors = remove_parallel_vectors_loop(vectors, cutoff=1e-4)
     projector = np.array(vectors).T
