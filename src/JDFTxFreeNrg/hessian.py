@@ -224,7 +224,8 @@ def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Struct
     from pymatgen.io.ase import AseAtomsAdaptor
     from ase import Atoms
     atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
-    atoms.positions += disp * (vec / np.linalg.norm(vec))
+    dvec = disp * (vec / np.linalg.norm(vec))
+    atoms.positions += dvec
     return AseAtomsAdaptor.get_structure(atoms)
 
 def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx: int, disp: float) -> Structure:
