@@ -246,3 +246,8 @@ def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx
     for j, idx in enumerate(free_idcs):
         vec[idx] += _vec[j]
     return pert_along_vec(structure, vec, disp)
+
+# TODO: Use this function in pre-existing functions that perform this operation
+def get_imaginary_mode_idcs(freqs: list[np.complex128], zero_thresh: 1e-3) -> list[int]:
+    imag_mode_idcs = [i for i, f in enumerate(freqs) if abs(f.imag) >= zero_thresh]
+    return imag_mode_idcs
