@@ -6,6 +6,7 @@ from pymatgen.core.structure import Structure
 from scipy.constants import Rydberg
 from JDFTxFreeNrg.projection import get_projector, project_out_subspace, project_on_subspace
 from JDFTxFreeNrg.glogwrite import write_Gaussian_vib_log
+from warnings import warn
 
 
 def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
@@ -261,7 +262,7 @@ def _pert_along_im_freqs_helper(structure: Structure, K_proj: np.ndarray, disps:
     if isinstance(disps, float):
         disps = [disps] * len(imag_mode_idcs)
     elif len(disps) > len(imag_mode_idcs):
-        print(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.")
+        warn(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.", stacklevel=2)
         disps = disps[:len(imag_mode_idcs)]
     elif len(disps) < len(imag_mode_idcs):
         raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}).")

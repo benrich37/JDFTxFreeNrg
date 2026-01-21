@@ -1,7 +1,7 @@
 import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
-from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs
+from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs
 import numpy as np
 from pymatgen.core import Structure
 
@@ -84,3 +84,32 @@ def test_get_imaginary_mode_idcs(zero_thresh: float, n_freqs: int, target_imag_i
         complex_freqs[idx] += 1j * (np.random.random()*im_freq_mag + zero_thresh)
     imag_idcs = get_imaginary_mode_idcs(complex_freqs, zero_thresh=zero_thresh)
     assert set(imag_idcs) == set(target_imag_idcs)
+
+
+@pytest.mark.parametrize(
+        ("natoms", "zero_thresh"),
+        [
+            (5, 1e-3),
+            (8, 1e-4),
+        ]
+)
+def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
+    # TODO: Hard-code in a Hessian with a known number of imaginary frequencies so that this test is less expensive
+    structure = Structure(np.eye(3)*10., list(["H" for _ in range(natoms)]), np.random.random((natoms, 3)), coords_are_cartesian=True)
+    tested = False
+    while not tested:
+        K_proj = np.random.random((3*natoms, 3*natoms))
+        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
+        eigs, vecs = solve_vib_modes(structure, K_proj)
+        freqs = get_freqs(eigs)
+        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
+        if len(im_eig_idcs) > 2:
+            # Runs normally
+            pert_struc = _pert_along_im_freqs_helper(structure, K_proj, disps=0.1, zero_thresh=zero_thresh)
+            # Error for too few displacements
+            with pytest.raises(ValueError):
+                _pert_along_im_freqs_helper(structure, K_proj, disps=[0.1], zero_thresh=zero_thresh)
+            # Warning for too many displacements
+            with pytest.warns(UserWarning):
+                _pert_along_im_freqs_helper(structure, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+            tested = True
