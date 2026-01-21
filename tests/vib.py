@@ -8,6 +8,7 @@ from JDFTxFreeNrg.hessian import pert_along_vec
         ("natoms", "disp"),
         [
             (5, 0.1),
+            (10, 0.05),
         ]
 )
 def test_pert_along_vec(natoms: int, disp: float):
