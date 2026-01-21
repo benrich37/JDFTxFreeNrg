@@ -21,7 +21,23 @@ def test_pert_along_vec(natoms: int, disp: float):
     _test_pert_along_vec(struc, pert_struc, vec, disp, natoms)
 
 
-
+@pytest.mark.parametrize(
+        ("disp"),
+        [
+            0.1,
+            0.05,
+        ]
+)
+def test_pert_along_vib_mode(disp: float):
+    # Constructing test modes that are purely Cartesian displacements for ensured orthogonality for easy checking
+    test_evecs = np.zeros((3,3,3))
+    for i_cart in range(3):
+        test_evecs[i_cart, :, i_cart] += 1.0
+    struc = Structure(np.eye(3)*10., list(["H" for _ in range(3)]), np.random.random((3, 3)), coords_are_cartesian=True)
+    for i_cart in range(3):
+        vec = test_evecs[i_cart]
+        pert_struc = pert_along_vib_mode(struc, test_evecs, i_cart, disp)
+        _test_pert_along_vec(struc, pert_struc, vec, disp, 3)
         
 
 
