@@ -251,3 +251,33 @@ def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx
 def get_imaginary_mode_idcs(freqs: list[np.complex128], zero_thresh: 1e-3) -> list[int]:
     imag_mode_idcs = [i for i, f in enumerate(freqs) if abs(f.imag) >= zero_thresh]
     return imag_mode_idcs
+
+# TODO: Rename this function to something more informative
+def _pert_along_im_freqs_helper(structure: Structure, K_proj: np.ndarray, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> list[Structure]:
+    omegaSqEigs, omegaSqEvecs = solve_vib_modes(structure, K_proj)
+    freqs = get_freqs(omegaSqEigs)
+    imag_mode_idcs = get_imaginary_mode_idcs(freqs, zero_thresh)
+    if isinstance(disps, float):
+        disps = [disps] * len(imag_mode_idcs)
+    elif len(disps) > len(imag_mode_idcs):
+        print(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.")
+        disps = disps[:len(imag_mode_idcs)]
+    elif len(disps) < len(imag_mode_idcs):
+        raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}).")
+    pert_structure = structure.copy()
+    for mode_idx, disp in zip(imag_mode_idcs, disps):
+        pert_structure = pert_along_vib_mode(pert_structure, omegaSqEvecs, mode_idx, disp)
+    return pert_structure
+
+def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> Structure:
+    K_proj = get_projected_K(structure, K, molecule_sets=molecule_sets)
+    pert_structure = _pert_along_im_freqs_helper(structure, K_proj, disps=disps, zero_thresh=zero_thresh)
+    return pert_structure
+
+def pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> Structure:
+    try:
+        pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh)
+    except ValueError as e:
+        print(f"Error generating structure perturbed along imaginary frequencies")
+        raise e
+    return pert_structure
