@@ -58,6 +58,22 @@ def _test_pert_along_vec(struc: Structure, pert_struc: Structure, vec: np.ndarra
     vec_norm = vec / np.linalg.norm(vec)
     assert np.allclose(dvec_normed, vec_norm)
 
+
+def get_K_proj_with_atleast_n_im_freqs(structure: Structure, atleast_n_im_freqs: int, zero_thresh: float = 1e-3) -> np.ndarray:
+    natoms = len(structure)
+    if atleast_n_im_freqs > 3*natoms:
+        raise ValueError(f"Cannot generate Hessian with {atleast_n_im_freqs} imaginary frequencies for structure with {natoms} atoms.")
+    generated = False
+    while not generated:
+        K_proj = np.random.random((3*natoms, 3*natoms))
+        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
+        eigs, _ = solve_vib_modes(structure, K_proj)
+        freqs = get_freqs(eigs)
+        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
+        if len(im_eig_idcs) >= atleast_n_im_freqs:
+            generated = True
+    return K_proj, im_eig_idcs
+
 @pytest.mark.parametrize(
         ("natoms", "zero_thresh"),
         [
@@ -68,23 +84,16 @@ def _test_pert_along_vec(struc: Structure, pert_struc: Structure, vec: np.ndarra
 def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
     # TODO: Hard-code in a Hessian with a known number of imaginary frequencies so that this test is less expensive
     struc = gen_random_structure(natoms)
-    tested = False
-    while not tested:
-        K_proj = np.random.random((3*natoms, 3*natoms))
-        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
-        eigs, vecs = solve_vib_modes(struc, K_proj)
-        freqs = get_freqs(eigs)
-        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
-        if len(im_eig_idcs) > 2:
-            # Runs normally
-            pert_struc = _pert_along_im_freqs_helper(struc, K_proj, disps=0.1, zero_thresh=zero_thresh)
-            # Error for too few displacements
-            with pytest.raises(ValueError):
-                _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1], zero_thresh=zero_thresh)
-            # Warning for too many displacements
-            with pytest.warns(UserWarning):
-                _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
-            tested = True
+    K_proj, im_eig_idcs = get_K_proj_with_atleast_n_im_freqs(struc, 2, zero_thresh=zero_thresh)
+    # Runs normally
+    pert_struc = _pert_along_im_freqs_helper(struc, K_proj, disps=0.1, zero_thresh=zero_thresh)
+    # Error for too few displacements
+    with pytest.raises(ValueError):
+        _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1], zero_thresh=zero_thresh)
+    # Warning for too many displacements
+    with pytest.warns(UserWarning):
+        _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+
 
 
 
