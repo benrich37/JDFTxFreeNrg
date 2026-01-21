@@ -209,3 +209,75 @@ def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecul
     freqs_cm = freq_nrg_to_cm(get_freqs(omegaSqEigs))
     structure = get_structure_for_gaussian_vib_log(structure, freqs_cm, omegaSqEvecs, zero_thresh=zero_thresh)
     write_Gaussian_vib_log(structure, log_path)
+
+
+def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Structure:
+    """ Perturb structure along a given vector.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        vec (np.ndarray): vector to perturb along, shape (nAtoms,3)
+
+    Returns:
+        Structure: perturbed structure
+    """
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from ase import Atoms
+    atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
+    atoms.positions += disp * (vec / np.linalg.norm(vec))
+    return AseAtomsAdaptor.get_structure(atoms)
+
+def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx: int, disp: float) -> Structure:
+    """ Perturb structure along a given imaginary frequency mode.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        omegaSqEvecs (np.ndarray): eigenvectors of mass-weighted Hessian
+        freqs (np.ndarray): frequencies in cm^-1
+        mode_idx (int): index of mode to perturb along
+        disp (float): displacement magnitude (negative values perturb in opposite direction)
+
+    Returns:
+        Structure: perturbed structure
+    """
+    free_idcs = get_free_idcs(structure)
+    vec = np.zeros((len(structure), 3))
+    _vec = omegaSqEvecs.T[mode_idx].reshape((len(free_idcs), 3))
+    for j, idx in enumerate(free_idcs):
+        vec[idx] += _vec[j]
+    return pert_along_vec(structure, vec, disp)
+
+# TODO: Use this function in pre-existing functions that perform this operation
+def get_imaginary_mode_idcs(freqs: list[np.complex128], zero_thresh: 1e-3) -> list[int]:
+    imag_mode_idcs = [i for i, f in enumerate(freqs) if abs(f.imag) >= zero_thresh]
+    return imag_mode_idcs
+
+# TODO: Rename this function to something more informative
+def _pert_along_im_freqs_helper(structure: Structure, K_proj: np.ndarray, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> list[Structure]:
+    omegaSqEigs, omegaSqEvecs = solve_vib_modes(structure, K_proj)
+    freqs = get_freqs(omegaSqEigs)
+    imag_mode_idcs = get_imaginary_mode_idcs(freqs, zero_thresh)
+    if isinstance(disps, float):
+        disps = [disps] * len(imag_mode_idcs)
+    elif len(disps) > len(imag_mode_idcs):
+        print(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.")
+        disps = disps[:len(imag_mode_idcs)]
+    elif len(disps) < len(imag_mode_idcs):
+        raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}).")
+    pert_structure = structure.copy()
+    for mode_idx, disp in zip(imag_mode_idcs, disps):
+        pert_structure = pert_along_vib_mode(pert_structure, omegaSqEvecs, mode_idx, disp)
+    return pert_structure
+
+def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> Structure:
+    K_proj = get_projected_K(structure, K, molecule_sets=molecule_sets)
+    pert_structure = _pert_along_im_freqs_helper(structure, K_proj, disps=disps, zero_thresh=zero_thresh)
+    return pert_structure
+
+def pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> Structure:
+    try:
+        pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh)
+    except ValueError as e:
+        print(f"Error generating structure perturbed along imaginary frequencies")
+        raise e
+    return pert_structure
