@@ -216,7 +216,7 @@ def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Struct
 
     Args:
         structure (Structure): pymatgen Structure
-        vec (np.ndarray): vector to perturb along, shape (nAtoms*3,)
+        vec (np.ndarray): vector to perturb along, shape (nAtoms,3)
 
     Returns:
         Structure: perturbed structure
@@ -224,5 +224,5 @@ def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Struct
     from pymatgen.io.ase import AseAtomsAdaptor
     from ase import Atoms
     atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
-    atoms.positions += disp * (vec / np.linalg.norm(vec)).reshape((-1, 3))
+    atoms.positions += disp * (vec / np.linalg.norm(vec))
     return AseAtomsAdaptor.get_structure(atoms)
