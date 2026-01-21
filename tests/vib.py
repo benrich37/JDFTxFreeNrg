@@ -59,7 +59,7 @@ def _test_pert_along_vec(struc: Structure, pert_struc: Structure, vec: np.ndarra
     assert np.allclose(dvec_normed, vec_norm)
 
 
-def get_K_proj_with_atleast_n_im_freqs(structure: Structure, atleast_n_im_freqs: int, zero_thresh: float = 1e-3) -> np.ndarray:
+def get_K_proj_with_atleast_n_im_freqs(structure: Structure, atleast_n_im_freqs: int, zero_thresh: float = 1e-3) -> tuple[np.ndarray, list[int]]:
     natoms = len(structure)
     if atleast_n_im_freqs > 3*natoms:
         raise ValueError(f"Cannot generate Hessian with {atleast_n_im_freqs} imaginary frequencies for structure with {natoms} atoms.")
@@ -93,6 +93,20 @@ def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
     # Warning for too many displacements
     with pytest.warns(UserWarning):
         _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+
+
+def test_pert_along_im_freqs(natoms: int, zero_thresh: float):
+    # TODO: Hard-code in a Hessian with known imaginary modes to test the functionality
+    struc = gen_random_structure(natoms)
+    K_proj, im_freq_idcs = get_K_proj_with_atleast_n_im_freqs(struc, 2, zero_thresh=zero_thresh)
+    # Works normally with default settings
+    pert_struc = pert_along_im_freqs(struc, K_proj)
+    # Still raises the value error - how can we check the print statement informing the user of the location of the error?
+    with pytest.raises(ValueError):
+        pert_struc = pert_along_im_freqs(struc, K_proj, disps=[0.1])  # Too few displacements
+
+
+
 
 
 

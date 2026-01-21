@@ -280,6 +280,6 @@ def pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list
     try:
         pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh)
     except ValueError as e:
-        print(f"Error generating structure perturbed along imaginary frequencies")
+        print("Error generating structure perturbed along imaginary frequencies")
         raise e
     return pert_structure
