@@ -209,3 +209,20 @@ def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecul
     freqs_cm = freq_nrg_to_cm(get_freqs(omegaSqEigs))
     structure = get_structure_for_gaussian_vib_log(structure, freqs_cm, omegaSqEvecs, zero_thresh=zero_thresh)
     write_Gaussian_vib_log(structure, log_path)
+
+
+def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Structure:
+    """ Perturb structure along a given vector.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        vec (np.ndarray): vector to perturb along, shape (nAtoms*3,)
+
+    Returns:
+        Structure: perturbed structure
+    """
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from ase import Atoms
+    atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
+    atoms.positions += disp * (vec / np.linalg.norm(vec)).reshape((-1, 3))
+    return AseAtomsAdaptor.get_structure(atoms)
