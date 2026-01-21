@@ -2,6 +2,8 @@ import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
 from JDFTxFreeNrg.hessian import pert_along_vec
+import numpy as np
+from pymatgen.core import Structure
 
 
 @pytest.mark.parametrize(
@@ -12,11 +14,13 @@ from JDFTxFreeNrg.hessian import pert_along_vec
         ]
 )
 def test_pert_along_vec(natoms: int, disp: float):
-    from pymatgen.core import Structure
-    import numpy as np
     coords = np.random.random((natoms, 3))
     struc = Structure(np.eye(3)*10., list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
     vec = np.random.random((natoms, 3))*5
+    _test_pert_along_vec(struc, vec, disp, natoms)
+
+def _test_pert_along_vec(struc: Structure, vec: np.ndarray, disp: float, natoms: int):
+    coords = struc.cart_coords
     pert_struc = pert_along_vec(struc, vec, disp)
     pert_coords = pert_struc.cart_coords
     dvec = pert_coords - coords
