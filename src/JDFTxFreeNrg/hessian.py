@@ -226,3 +226,23 @@ def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Struct
     atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
     atoms.positions += disp * (vec / np.linalg.norm(vec))
     return AseAtomsAdaptor.get_structure(atoms)
+
+def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx: int, disp: float) -> Structure:
+    """ Perturb structure along a given imaginary frequency mode.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        omegaSqEvecs (np.ndarray): eigenvectors of mass-weighted Hessian
+        freqs (np.ndarray): frequencies in cm^-1
+        mode_idx (int): index of mode to perturb along
+        disp (float): displacement magnitude (negative values perturb in opposite direction)
+
+    Returns:
+        Structure: perturbed structure
+    """
+    free_idcs = get_free_idcs(structure)
+    vec = np.zeros((len(structure), 3))
+    _vec = omegaSqEvecs.T[mode_idx].reshape((len(free_idcs), 3))
+    for j, idx in enumerate(free_idcs):
+        vec[idx] += _vec[j]
+    return pert_along_vec(structure, vec, disp)
