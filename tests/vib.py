@@ -1,10 +1,14 @@
 import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
-from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs
+from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs
 import numpy as np
 from pymatgen.core import Structure
 
+def gen_random_structure(natoms: int, unit_cell_magnitude: float = 10.) -> Structure:
+    coords = np.random.random((natoms, 3))
+    struc = Structure(np.eye(3)*unit_cell_magnitude, list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
+    return struc
 
 @pytest.mark.parametrize(
         ("natoms", "disp"),
@@ -15,7 +19,7 @@ from pymatgen.core import Structure
 )
 def test_pert_along_vec(natoms: int, disp: float):
     coords = np.random.random((natoms, 3))
-    struc = Structure(np.eye(3)*10., list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
+    struc = gen_random_structure(natoms)
     vec = np.random.random((natoms, 3))*5
     pert_struc = pert_along_vec(struc, vec, disp)
     _test_pert_along_vec(struc, pert_struc, vec, disp, natoms)
@@ -33,7 +37,7 @@ def test_pert_along_vib_mode(disp: float):
     test_evecs = np.zeros((3,3,3))
     for i_cart in range(3):
         test_evecs[i_cart, :, i_cart] += 1.0
-    struc = Structure(np.eye(3)*10., list(["H" for _ in range(3)]), np.random.random((3, 3)), coords_are_cartesian=True)
+    struc = gen_random_structure(3)
     for i_cart in range(3):
         vec = test_evecs[i_cart]
         pert_struc = pert_along_vib_mode(struc, test_evecs, i_cart, disp)
@@ -53,6 +57,34 @@ def _test_pert_along_vec(struc: Structure, pert_struc: Structure, vec: np.ndarra
     dvec_normed = dvec / dvec_len
     vec_norm = vec / np.linalg.norm(vec)
     assert np.allclose(dvec_normed, vec_norm)
+
+@pytest.mark.parametrize(
+        ("natoms", "zero_thresh"),
+        [
+            (5, 1e-3),
+            (8, 1e-4),
+        ]
+)
+def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
+    # TODO: Hard-code in a Hessian with a known number of imaginary frequencies so that this test is less expensive
+    struc = gen_random_structure(natoms)
+    tested = False
+    while not tested:
+        K_proj = np.random.random((3*natoms, 3*natoms))
+        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
+        eigs, vecs = solve_vib_modes(struc, K_proj)
+        freqs = get_freqs(eigs)
+        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
+        if len(im_eig_idcs) > 2:
+            # Runs normally
+            pert_struc = _pert_along_im_freqs_helper(struc, K_proj, disps=0.1, zero_thresh=zero_thresh)
+            # Error for too few displacements
+            with pytest.raises(ValueError):
+                _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1], zero_thresh=zero_thresh)
+            # Warning for too many displacements
+            with pytest.warns(UserWarning):
+                _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+            tested = True
 
 
 
@@ -86,30 +118,5 @@ def test_get_imaginary_mode_idcs(zero_thresh: float, n_freqs: int, target_imag_i
     assert set(imag_idcs) == set(target_imag_idcs)
 
 
-@pytest.mark.parametrize(
-        ("natoms", "zero_thresh"),
-        [
-            (5, 1e-3),
-            (8, 1e-4),
-        ]
-)
-def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
-    # TODO: Hard-code in a Hessian with a known number of imaginary frequencies so that this test is less expensive
-    structure = Structure(np.eye(3)*10., list(["H" for _ in range(natoms)]), np.random.random((natoms, 3)), coords_are_cartesian=True)
-    tested = False
-    while not tested:
-        K_proj = np.random.random((3*natoms, 3*natoms))
-        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
-        eigs, vecs = solve_vib_modes(structure, K_proj)
-        freqs = get_freqs(eigs)
-        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
-        if len(im_eig_idcs) > 2:
-            # Runs normally
-            pert_struc = _pert_along_im_freqs_helper(structure, K_proj, disps=0.1, zero_thresh=zero_thresh)
-            # Error for too few displacements
-            with pytest.raises(ValueError):
-                _pert_along_im_freqs_helper(structure, K_proj, disps=[0.1], zero_thresh=zero_thresh)
-            # Warning for too many displacements
-            with pytest.warns(UserWarning):
-                _pert_along_im_freqs_helper(structure, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
-            tested = True
+
+
