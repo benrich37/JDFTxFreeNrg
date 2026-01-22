@@ -1,5 +1,5 @@
 import numpy as np
-from JDFTxFreeNrg._common import dagger, invsqrt, _error_on_nan_in_list_of_floats, _error_on_nan_in_list_of_vectors
+from JDFTxFreeNrg._common import dagger, invsqrt, _error_on_nan_in_list_of_floats, _error_on_nan_in_list_of_vectors, _error_on_nan_in_array
 
 """
 Collections of functions to orthogonalize sets of vectors and projectors
@@ -58,7 +58,9 @@ def _orthogonalize_vector_set_step(vectors: list[np.ndarray], idx: int, cutoff: 
 
 def remove_parallel_vectors_loop(vectors: list[np.ndarray], cutoff: float = 1e-4, maxstep: int = 10) -> list[np.ndarray]:
     try:
-        return _remove_parallel_vectors_loop(vectors, cutoff=cutoff, maxstep=maxstep)
+        vectors = _remove_parallel_vectors_loop(vectors, cutoff=cutoff, maxstep=maxstep)
+        _error_on_nan_in_list_of_vectors(vectors, context="after running remove_parallel_vectors_loop")
+        return vectors
     except Exception as e:
         print(f"Error in running remove_parallel_vectors_loop")
         raise e
@@ -86,20 +88,35 @@ def _remove_parallel_vectors_loop(vectors: list[np.ndarray], cutoff: float = 1e-
 
 def orthogonalize_projector(projector1):
     try:
-        return _orthogonalize_projector(projector1)
+        projector = _orthogonalize_projector(projector1)
+        _error_on_nan_in_array(projector, context="after orthogonalizing projector")
+        return projector
     except Exception as e:
-        print(f"Error in orthogonalizing projector: {projector1}")
+        print(f"Error in orthogonalizing projector")
         raise e
 
-def _orthogonalize_projector(projector1):
+def _orthogonalize_projector(projector1: np.ndarray) -> np.ndarray:
     return projector1 @ invsqrt(dagger(projector1)@projector1)
+
+# TODO: Make sure this reproduces the same result as building the rotation vectors from the inertia tensor for an overcomplete list of rotation vectors for a linear molecule
+def safe_orthogonalize_projector(projector1):
+    try:
+        return orthogonalize_projector(projector1)
+    except Exception as e:
+        print(f"Error in regular orthogonalization of projector - attemping progressive orthogonalization")
+        vectors = [v for v in projector1.T]
+        vectors = remove_parallel_vectors_loop(vectors)
+        # vectors = progressively_orthogonalize_vectors(vectors)
+        return np.array(vectors).T
+
+        
 
 
 def progressively_orthogonalize_vectors(vectors: list[np.ndarray]) -> list[np.ndarray]:
     try:
         return _progressively_orthogonalize_vectors(vectors)
     except Exception as e:
-        print(f"Error in progressively orthogonalizing vectors: {vectors}")
+        print(f"Error in progressively orthogonalizing vectors")
         raise e
 
 

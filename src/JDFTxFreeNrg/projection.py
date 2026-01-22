@@ -1,5 +1,5 @@
 
-from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector
+from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector, safe_orthogonalize_projector
 from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array
 import numpy as np
 from pymatgen.core.structure import Structure, Molecule
@@ -169,7 +169,7 @@ def get_center_of_mass(structure: Structure) -> np.ndarray:
 
 def get_rotations_molecule(
         modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5,
-        center: np.ndarray | None = None, axes: list[np.ndarray] | None = None, ortho: bool = True
+        center: np.ndarray | None = None, axes: list[np.ndarray] | None = None, ortho: bool = True, safe_ortho: bool = True
         ):
     if center is None:
         center = get_center_of_mass(molecule_structure)
@@ -190,7 +190,10 @@ def get_rotations_molecule(
         _error_on_nan_in_array(np.array(vec), context=f"rotation projector for axis {j}")
         projectors.append(vec)
     if ortho:
-        projectors = orthogonalize_projector(np.array(projectors).T)
+        if safe_ortho:
+            projectors = safe_orthogonalize_projector(np.array(projectors).T)
+        else:
+            projectors = orthogonalize_projector(np.array(projectors).T)
         projectors = [v for v in projectors.T]
     return projectors
 
