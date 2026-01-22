@@ -11,6 +11,7 @@ def remove_parallel_vectors(vectors: list[np.ndarray], cutoff: float = 1e-4) -> 
     try:
         vectors = _remove_parallel_vectors(vectors, cutoff=cutoff)
         _error_on_nan_in_list_of_vectors(vectors, context="after running remove_parallel_vectors")
+        return vectors
     except Exception as e:
         print(f"Error in removing parallel vectors")
         raise e
@@ -35,6 +36,7 @@ def orthogonalize_vector_set_step(vectors: list[np.ndarray], idx: int, cutoff: f
     try:
         vectors = _orthogonalize_vector_set_step(vectors, idx, cutoff=cutoff)
         _error_on_nan_in_list_of_vectors(vectors, context=f"after orthogonalizing vector set at index {idx}")
+        return vectors
     except Exception as e:
         print(f"Error in orthogonalizing vector set at index {idx}")
         raise e
