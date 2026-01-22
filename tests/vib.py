@@ -95,6 +95,13 @@ def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
         _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
 
 
+@pytest.mark.parametrize(
+        ("natoms", "zero_thresh"),
+        [
+            (5, 1e-3),
+            (8, 1e-4),
+        ]
+)
 def test_pert_along_im_freqs(natoms: int, zero_thresh: float):
     # TODO: Hard-code in a Hessian with known imaginary modes to test the functionality
     struc = gen_random_structure(natoms)

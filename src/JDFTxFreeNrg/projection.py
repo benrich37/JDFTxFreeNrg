@@ -144,7 +144,41 @@ def get_translations_molecule(modes: list[Mode], mol_indices: list[int], axes: l
         projectors.append(vec)
     return projectors
 
-def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
+def project_out_vector_from_vector(vector_save: np.ndarray, vector_proj: np.ndarray) -> np.ndarray:
+    overlap = dot(vector_save, vector_proj) / dot(vector_proj, vector_proj)
+    projected_vector = vector_save - overlap * vector_proj
+    return projected_vector / np.linalg.norm(projected_vector)
+
+# TODO: Test this function
+def gen_ortho_axes_R3(axis: np.ndarray) -> list[np.ndarray]:
+    R3 = np.eye(3)
+    axis = axis / np.linalg.norm(axis)
+    overlaps = [abs(np.dot(axis, R3[:, i])) for i in range(3)]
+    idcs = np.argsort(overlaps)
+    i1, i2 = idcs[0], idcs[1]
+    v1 = project_out_vector_from_vector(R3[:, i1], axis)
+    v2 = project_out_vector_from_vector(R3[:, i2], axis)
+    v2 = project_out_vector_from_vector(v2, v1)
+    return [v1, v2]
+
+
+
+
+def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray | dict) -> list[np.ndarray]:
+    axis_data = axis
+    gen_ortho_set = False
+    if isinstance(axis, dict):
+        gen_ortho_set = axis.get("ortho", False)
+        axis_data = axis.get("axis", None)
+        assert axis_data is not None, "An axis provided as a dictionary must provide axis data (str, list[int], np.ndarray) under the key 'axis'."
+    axis_vec = resolve_axis_no_ortho(structure, axis_data)
+    if gen_ortho_set:
+        ortho_axes = gen_ortho_axes_R3(axis_vec)
+        return ortho_axes
+    else:
+        return [axis_vec]
+
+def resolve_axis_no_ortho(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
     if isinstance(axis, np.ndarray):
         return axis
     elif isinstance(axis, str):
@@ -199,7 +233,8 @@ def _resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
             else:
                 resolved_axes = []
                 for axis in axes:
-                    resolved_axes.append(resolve_axis(structure, axis))
+                    resolve_axes += resolve_axis(structure, axis)
+                    # resolved_axes.append(resolve_axis(structure, axis))
             mset["axes"] = resolved_axes
 
 
