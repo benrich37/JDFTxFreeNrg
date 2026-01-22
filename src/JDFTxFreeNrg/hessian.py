@@ -178,10 +178,10 @@ def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | No
     else:
         structure = JDFTXOutfile.from_file(calc_dir / "out").structure
     fixed = (len(get_free_idcs(structure)) != len(structure))
-    if proj_trans is None:
-        proj_trans = not fixed
-    if proj_rot is None:
-        proj_rot = not fixed
+    # if proj_trans is None:
+    #     proj_trans = not fixed
+    # if proj_rot is None:
+    #     proj_rot = not fixed
     K = get_projected_K(
         structure, 
         read_K(calc_dir, structure, expand_to_full=True), 
@@ -196,7 +196,7 @@ def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | No
 def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, use_in: bool = True, trim_zero: bool = True, zero_thresh: float = 1e-1,
                                ) -> np.ndarray:
     _zero_thresh = (zero_thresh / nrg_to_cm_conv)**2
-    omegaSqEigs = get_omegaSqEigs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse, use_in=use_in, trim_zero=trim_zero, zero_thresh=_zero_thresh, proj_rot=proj_rot, proj_trans=proj_trans)
+    omegaSqEigs = get_omegaSqEigs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse, use_in=use_in, trim_zero=trim_zero, zero_thresh=_zero_thresh)
     freqs = np.array(freq_nrg_to_cm(get_freqs(np.array(omegaSqEigs))))
     return freqs
 
