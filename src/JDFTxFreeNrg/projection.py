@@ -1,67 +1,15 @@
 
 from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector, safe_orthogonalize_projector
-from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array
+from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array, _error_on_nan_in_list_of_vectors
 import numpy as np
 from pymatgen.core.structure import Structure, Molecule
 from pymatgen.core.units import bohr_to_ang
 
-def get_CMcoords(structure: Structure) -> np.ndarray:
-    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites])
-    total_mass = np.sum(mass_vector)
-    CMcoords = np.zeros((len(structure.sites), 3))
-    CM = np.zeros(3)
-    for i, site in enumerate(structure.sites):
-        CM += site.coords * mass_vector[i]
-    CM /= total_mass
-    for i, site in enumerate(structure.sites):
-        CMcoords[i, :] = site.coords - CM
-    return CMcoords / bohr_to_ang
-
-def get_inertia_tensor(struc: Structure):
-    """
-    Calculate the average moment of inertia of a molecule.
-
-    Args:
-        mol (Molecule): Pymatgen Molecule
-
-    Returns:
-        int, list: average moment of inertia, eigenvalues of the inertia tensor
-    """
-    mol = Molecule.from_sites(struc.sites)
-    centered_mol = mol.get_centered_molecule()
-    inertia_tensor = np.zeros((3, 3))
-    for site in centered_mol:
-        c = site.coords
-        wt = site.specie.atomic_mass
-        for dim in range(3):
-            inertia_tensor[dim, dim] += wt * (c[(dim + 1) % 3] ** 2 + c[(dim + 2) % 3] ** 2)
-        for ii, jj in [(0, 1), (1, 2), (0, 2)]:
-            inertia_tensor[ii, jj] += -wt * c[ii] * c[jj]
-            inertia_tensor[jj, ii] += -wt * c[jj] * c[ii]
-    return inertia_tensor / (bohr_to_ang ** 2)
-
-def _get_inertia_tensor(struc: Structure):
-    """
-    Calculate the average moment of inertia of a molecule.
-
-    Args:
-        mol (Molecule): Pymatgen Molecule
-
-    Returns:
-        int, list: average moment of inertia, eigenvalues of the inertia tensor
-    """
-    mol = Molecule.from_sites(struc.sites)
-    centered_mol = mol.get_centered_molecule()
-    inertia_tensor = np.zeros((3, 3))
-    for site in centered_mol:
-        c = site.coords
-        wt = site.specie.atomic_mass
-        for dim in range(3):
-            inertia_tensor[dim, dim] += wt * (c[(dim + 1) % 3] ** 2 + c[(dim + 2) % 3] ** 2)
-        for ii, jj in [(0, 1), (1, 2), (0, 2)]:
-            inertia_tensor[ii, jj] += -wt * c[ii] * c[jj]
-            inertia_tensor[jj, ii] += -wt * c[jj] * c[ii]
-    return inertia_tensor / (bohr_to_ang ** 2)
+ref_axs = {
+    "x": np.array([1,0,0], dtype=np.float64),
+    "y": np.array([0,1,0], dtype=np.float64),
+    "z": np.array([0,0,1], dtype=np.float64)
+}
 
 class Mode:
     def __init__(self, n: np.ndarray, iAtom: int):
@@ -86,66 +34,52 @@ def get_modes(structure: Structure) -> list[Mode]:
         print("Error in constructing modes:")
         raise e
 
-def fill_translations(projector: np.ndarray, modes: list[Mode], i_start: int = 0):
-    for k in range(3):
-        axis = np.zeros(3)
-        axis[k] = 1.0
-        for i, mode in enumerate(modes):
-            projector[i, i_start + k] = dot(mode.n, axis)
-    return projector
+def get_CMcoords(structure: Structure) -> np.ndarray:
+    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites])
+    total_mass = np.sum(mass_vector)
+    CMcoords = np.zeros((len(structure.sites), 3))
+    CM = np.zeros(3)
+    for i, site in enumerate(structure.sites):
+        CM += site.coords * mass_vector[i]
+    CM /= total_mass
+    for i, site in enumerate(structure.sites):
+        CMcoords[i, :] = site.coords - CM
+    return CMcoords / bohr_to_ang
 
-def fill_translations_molecule(projector: np.ndarray, modes: list[Mode], mol_indices: list[int], i_start: int = 0, dofs: list[int] | None = None):
-    if dofs is None:
-        dofs = [0, 1, 2]
-    for k in dofs:
-        axis = np.zeros(3)
-        axis[k] = 1.0
-        for i, mode in enumerate(modes):
-            if mode.iAtom in mol_indices:
-                projector[i, i_start + k] = dot(mode.n, axis)
-    return projector
+def get_inertia_tensor(struc: Structure):
+    """
+    Calculate the average moment of inertia of a molecule.
 
-def fill_rotations(projector: np.ndarray, modes: list[Mode], structure: Structure, symmThreshold: float = 1e-5, i_start: int = 0):
-    CMcoords = get_CMcoords(structure)
-    InertiaTensor = get_inertia_tensor(structure)
-    Ieigs, Ievecs = np.linalg.eigh(InertiaTensor)
-    for j in range(3):
-        if Ieigs[j] > symmThreshold:
-            axis = remove_phase(3, Ievecs[:, j]).real
-            for i, mode in enumerate(modes):
-                projector[i, i_start + j] = box(modes[i].n, axis.T, CMcoords[mode.iAtom])
-    return projector
+    Args:
+        mol (Molecule): Pymatgen Molecule
 
-def fill_rotations_molecule(projector: np.ndarray, modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5, i_start: int = 0, dofs: list[int] | None = None):
-    if dofs is None:
-        dofs = [0, 1, 2]
-    CMcoords = get_CMcoords(molecule_structure)
-    InertiaTensor = get_inertia_tensor(molecule_structure)
-    Ieigs, Ievecs = np.linalg.eigh(InertiaTensor)
-    for j in dofs:
-        if Ieigs[j] > symmThreshold:
-            axis = remove_phase(3, Ievecs[:, j]).real
-            for i, mode in enumerate(modes):
-                if mode.iAtom in mol_indices:
-                    val = box(modes[i].n, axis.T, CMcoords[mol_indices.index(modes[i].iAtom)])
-                    projector[i, i_start + j] = val
-    return projector
+    Returns:
+        int, list: average moment of inertia, eigenvalues of the inertia tensor
+    """
+    try:
+        inertia_tensor = _get_inertia_tensor(struc)
+    except Exception as e:
+        print("Error in calculating inertia tensor:")
+        raise e
+    _error_on_nan_in_array(inertia_tensor, context="inertia tensor calculation")
+    return inertia_tensor
+
+def _get_inertia_tensor(struc: Structure):
+    mol = Molecule.from_sites(struc.sites)
+    centered_mol = mol.get_centered_molecule()
+    inertia_tensor = np.zeros((3, 3))
+    for site in centered_mol:
+        c = site.coords
+        wt = site.specie.atomic_mass
+        for dim in range(3):
+            inertia_tensor[dim, dim] += wt * (c[(dim + 1) % 3] ** 2 + c[(dim + 2) % 3] ** 2)
+        for ii, jj in [(0, 1), (1, 2), (0, 2)]:
+            inertia_tensor[ii, jj] += -wt * c[ii] * c[jj]
+            inertia_tensor[jj, ii] += -wt * c[jj] * c[ii]
+    return inertia_tensor / (bohr_to_ang ** 2)
 
 
-def get_translations_molecule(modes: list[Mode], mol_indices: list[int], axes: list[np.ndarray] | None = None) -> np.ndarray:
-    projectors = []
-    if axes is None:
-        axes = list(np.eye(3))
-    else:
-        axes = progressively_orthogonalize_vectors(axes)
-    for k, axis in enumerate(axes):
-        vec = np.zeros(len(modes))
-        for i, mode in enumerate(modes):
-            if mode.iAtom in mol_indices:
-                vec[i] = dot(mode.n, axis)
-                # projector[i, i_start + k] = dot(mode.n, axis)
-        projectors.append(vec)
-    return projectors
+
 
 def get_centered_coords(structure: Structure, center: np.ndarray) -> np.ndarray:
     centered_coords = np.zeros((len(structure.sites), 3))
@@ -165,8 +99,7 @@ def get_center_of_mass(structure: Structure) -> np.ndarray:
     CM /= total_mass
     return CM
 
-# def _linear_rotation_danger(molecule_structure: Structure, mol_indices: list[int], center: np.ndarray, axes: list[np.ndarray], symmThreshold: float = 1e-5) -> bool:
-
+# TODO: Partition out individual operations being performed within this function into helper functions for testing and clarity
 def get_rotations_molecule(
         modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5,
         center: np.ndarray | None = None, axes: list[np.ndarray] | None = None, ortho: bool = True, safe_ortho: bool = True
@@ -197,11 +130,19 @@ def get_rotations_molecule(
         projectors = [v for v in projectors.T]
     return projectors
 
-ref_axs = {
-    "x": np.array([1,0,0], dtype=np.float64),
-    "y": np.array([0,1,0], dtype=np.float64),
-    "z": np.array([0,0,1], dtype=np.float64)
-}
+def get_translations_molecule(modes: list[Mode], mol_indices: list[int], axes: list[np.ndarray] | None = None) -> np.ndarray:
+    projectors = []
+    if axes is None:
+        axes = list(np.eye(3))
+    else:
+        axes = progressively_orthogonalize_vectors(axes)
+    for k, axis in enumerate(axes):
+        vec = np.zeros(len(modes))
+        for i, mode in enumerate(modes):
+            if mode.iAtom in mol_indices:
+                vec[i] = dot(mode.n, axis)
+        projectors.append(vec)
+    return projectors
 
 def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
     if isinstance(axis, np.ndarray):
@@ -261,12 +202,7 @@ def _resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
                     resolved_axes.append(resolve_axis(structure, axis))
             mset["axes"] = resolved_axes
 
-def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
-    try:
-        return _get_projector_raw(structure, molecule_sets=molecule_sets)
-    except Exception as e:
-        print("Error in constructing raw projector:")
-        raise e
+
     
 def get_clean_mol_set(mol_set: dict) -> dict:
     try:
@@ -286,7 +222,6 @@ def _get_clean_mol_set(mol_set: dict) -> dict:
         raise ValueError("molecule set must have at least one of 'trans' or 'rot' set to True")
     clean_set['center'] = mol_set.get("center", None)
     clean_set['axes'] = mol_set.get("axes", None)
-    # if (clean_set['axes'] is not None) or (isinstance(clean_set['axes'], list) and len(clean_set['axes']) == 0):
     if (isinstance(clean_set['axes'], list) and len(clean_set['axes']) == 0):
         raise ValueError("molecule set must have non-empty 'axes' list. (Use [\"x\",\"y\",\"z\"] for standard axes, or leave as None/missing to auto-generate based on inertia tensor.)")
     clean_set['ortho'] = mol_set.get("ortho", True)
@@ -318,6 +253,12 @@ def _append_projectors_mol_set_rot(projectors: list[np.ndarray], modes: list[Mod
             raise e
     return projectors
 
+def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
+    try:
+        return _get_projector_raw(structure, molecule_sets=molecule_sets)
+    except Exception as e:
+        print("Error in constructing raw projector:")
+        raise e
 
 def _get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
     if molecule_sets is None:
@@ -338,8 +279,6 @@ def get_projector(structure: Structure, molecule_sets: list[dict] | None = None)
     vectors = [v for v in projector_raw.T]
     vectors = remove_parallel_vectors_loop(vectors, cutoff=1e-4)
     projector = np.array(vectors).T
-    if np.isnan(projector).any():
-        raise ValueError("NaN detected in projector after removing parallel vectors.")
     return projector
 
 
