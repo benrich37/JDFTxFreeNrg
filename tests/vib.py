@@ -1,6 +1,114 @@
 import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
+from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs
+import numpy as np
+from pymatgen.core import Structure
+
+def gen_random_structure(natoms: int, unit_cell_magnitude: float = 10.) -> Structure:
+    coords = np.random.random((natoms, 3))
+    struc = Structure(np.eye(3)*unit_cell_magnitude, list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
+    return struc
+
+@pytest.mark.parametrize(
+        ("natoms", "disp"),
+        [
+            (5, 0.1),
+            (10, 0.05),
+        ]
+)
+def test_pert_along_vec(natoms: int, disp: float):
+    coords = np.random.random((natoms, 3))
+    struc = gen_random_structure(natoms)
+    vec = np.random.random((natoms, 3))*5
+    pert_struc = pert_along_vec(struc, vec, disp)
+    _test_pert_along_vec(struc, pert_struc, vec, disp, natoms)
+
+
+@pytest.mark.parametrize(
+        ("disp"),
+        [
+            0.1,
+            0.05,
+        ]
+)
+def test_pert_along_vib_mode(disp: float):
+    # Constructing test modes that are purely Cartesian displacements for ensured orthogonality for easy checking
+    test_evecs = np.zeros((3,3,3))
+    for i_cart in range(3):
+        test_evecs[i_cart, :, i_cart] += 1.0
+    struc = gen_random_structure(3)
+    for i_cart in range(3):
+        vec = test_evecs[i_cart]
+        pert_struc = pert_along_vib_mode(struc, test_evecs, i_cart, disp)
+        _test_pert_along_vec(struc, pert_struc, vec, disp, 3)
+        
+
+
+def _test_pert_along_vec(struc: Structure, pert_struc: Structure, vec: np.ndarray, disp: float, natoms: int):
+    coords = struc.cart_coords
+    pert_coords = pert_struc.cart_coords
+    dvec = pert_coords - coords
+    dvec_len = np.linalg.norm(dvec)
+    assert np.shape(pert_coords) == (natoms, 3)
+    # Check magnitude is correct
+    assert np.isclose(np.linalg.norm(dvec), disp), f"Expected displacement {disp}, got {dvec_len}"
+    # Check displacement direction is correct
+    dvec_normed = dvec / dvec_len
+    vec_norm = vec / np.linalg.norm(vec)
+    assert np.allclose(dvec_normed, vec_norm)
+
+
+def get_K_proj_with_atleast_n_im_freqs(structure: Structure, atleast_n_im_freqs: int, zero_thresh: float = 1e-3) -> tuple[np.ndarray, list[int]]:
+    natoms = len(structure)
+    if atleast_n_im_freqs > 3*natoms:
+        raise ValueError(f"Cannot generate Hessian with {atleast_n_im_freqs} imaginary frequencies for structure with {natoms} atoms.")
+    generated = False
+    while not generated:
+        K_proj = np.random.random((3*natoms, 3*natoms))
+        K_proj = (K_proj + K_proj.T) / 2  # Make symmetric
+        eigs, _ = solve_vib_modes(structure, K_proj)
+        freqs = get_freqs(eigs)
+        im_eig_idcs = get_imaginary_mode_idcs(freqs, zero_thresh=zero_thresh)
+        if len(im_eig_idcs) >= atleast_n_im_freqs:
+            generated = True
+    return K_proj, im_eig_idcs
+
+@pytest.mark.parametrize(
+        ("natoms", "zero_thresh"),
+        [
+            (5, 1e-3),
+            (8, 1e-4),
+        ]
+)
+def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
+    # TODO: Hard-code in a Hessian with a known number of imaginary frequencies so that this test is less expensive
+    struc = gen_random_structure(natoms)
+    K_proj, im_eig_idcs = get_K_proj_with_atleast_n_im_freqs(struc, 2, zero_thresh=zero_thresh)
+    # Runs normally
+    pert_struc = _pert_along_im_freqs_helper(struc, K_proj, disps=0.1, zero_thresh=zero_thresh)
+    # Error for too few displacements
+    with pytest.raises(ValueError):
+        _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1], zero_thresh=zero_thresh)
+    # Warning for too many displacements
+    with pytest.warns(UserWarning):
+        _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+
+
+def test_pert_along_im_freqs(natoms: int, zero_thresh: float):
+    # TODO: Hard-code in a Hessian with known imaginary modes to test the functionality
+    struc = gen_random_structure(natoms)
+    K_proj, im_freq_idcs = get_K_proj_with_atleast_n_im_freqs(struc, 2, zero_thresh=zero_thresh)
+    # Works normally with default settings
+    pert_struc = pert_along_im_freqs(struc, K_proj)
+    # Still raises the value error - how can we check the print statement informing the user of the location of the error?
+    with pytest.raises(ValueError):
+        pert_struc = pert_along_im_freqs(struc, K_proj, disps=[0.1])  # Too few displacements
+
+
+
+
+
 
 
 @pytest.mark.parametrize(
@@ -13,3 +121,25 @@ from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
 def test_expected_qrrho_enthalpy(freq: float, T: float, enthalpy_expected: float):
     enthalpy = get_qrrho_vib_enthalpies(freq, T=T)
     assert pytest.approx(enthalpy, rel=1e-5) == enthalpy_expected
+
+# Test values autogenerated by copilot
+@pytest.mark.parametrize(
+        ("zero_thresh", "n_freqs", "target_imag_idcs"),
+        [
+            (1e-3, 10, [2, 5]),
+            (1e-4, 20, [0, 3, 7, 15]),
+            (1e-5, 15, [1, 4, 9, 12]),
+        ]
+)
+def test_get_imaginary_mode_idcs(zero_thresh: float, n_freqs: int, target_imag_idcs: list[int], re_freq_mag: float = 1000., im_freq_mag: float = 1.):
+    re_freqs = np.random.random(n_freqs) * re_freq_mag  # Large positive frequencies
+    complex_freqs = re_freqs.astype(np.complex128)
+    target_imag_idcs = list(set(list([idx % n_freqs for idx in target_imag_idcs]))) # Ensure unique idcs within range
+    for idx in target_imag_idcs:
+        complex_freqs[idx] += 1j * (np.random.random()*im_freq_mag + zero_thresh)
+    imag_idcs = get_imaginary_mode_idcs(complex_freqs, zero_thresh=zero_thresh)
+    assert set(imag_idcs) == set(target_imag_idcs)
+
+
+
+

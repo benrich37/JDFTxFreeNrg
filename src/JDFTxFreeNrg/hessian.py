@@ -6,6 +6,7 @@ from pymatgen.core.structure import Structure
 from scipy.constants import Rydberg
 from JDFTxFreeNrg.projection import get_projector, project_out_subspace, project_on_subspace
 from JDFTxFreeNrg.glogwrite import write_Gaussian_vib_log
+from warnings import warn
 
 
 def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
@@ -224,7 +225,8 @@ def pert_along_vec(structure: Structure, vec: np.ndarray, disp: float) -> Struct
     from pymatgen.io.ase import AseAtomsAdaptor
     from ase import Atoms
     atoms: Atoms = AseAtomsAdaptor.get_atoms(structure)
-    atoms.positions += disp * (vec / np.linalg.norm(vec))
+    dvec = disp * (vec / np.linalg.norm(vec))
+    atoms.positions += dvec
     return AseAtomsAdaptor.get_structure(atoms)
 
 def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx: int, disp: float) -> Structure:
@@ -260,7 +262,7 @@ def _pert_along_im_freqs_helper(structure: Structure, K_proj: np.ndarray, disps:
     if isinstance(disps, float):
         disps = [disps] * len(imag_mode_idcs)
     elif len(disps) > len(imag_mode_idcs):
-        print(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.")
+        warn(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.", stacklevel=2)
         disps = disps[:len(imag_mode_idcs)]
     elif len(disps) < len(imag_mode_idcs):
         raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}).")
@@ -278,6 +280,6 @@ def pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list
     try:
         pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh)
     except ValueError as e:
-        print(f"Error generating structure perturbed along imaginary frequencies")
+        print("Error generating structure perturbed along imaginary frequencies")
         raise e
     return pert_structure
