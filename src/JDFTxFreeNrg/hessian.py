@@ -20,8 +20,7 @@ def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
             elif f.real == 0:
                 print(f"Mode {i}: {f.imag:.2f} i cm^-1")
             else:
-                print(f"Mode {i}: {f.real:.2f} + {f.imag:.2f} i cm^-1")
-
+                print(f"Mode {i}: {f.real:.2f} + {f.imag:.2f} i cm^-1") # I don't see how this could ever happen
 
 
 def get_invsqrtM(structure: Structure) -> np.ndarray:
@@ -35,17 +34,43 @@ def get_invsqrtM(structure: Structure) -> np.ndarray:
     return invsqrtM
 
 def get_freqs(omegaSqEigs: np.ndarray) -> np.ndarray:
-    complex_omegaSqEigs = omegaSqEigs.astype(np.complex128)
-    freqs = np.sqrt(complex_omegaSqEigs)
+    """ Convert eigenvalues of mass-weighted Hessian to frequencies in Hartree.
+    
+    Args:
+        omegaSqEigs (np.ndarray): Eigenvalues of mass-weighted Hessian
+        
+    Returns:
+        np.ndarray: Frequencies in Hartree
+    """
+    freqs = np.sqrt(omegaSqEigs.astype(np.complex128))
     return freqs
 
 nrg_to_cm_conv = Rydberg / 50.
 
 def freq_nrg_to_cm(freqs: np.ndarray) -> np.ndarray:
+    """ Convert frequencies from Hartree to cm^-1
+    
+    Args:
+        freqs (np.ndarray): Frequencies in Hartree
+    
+    Returns:
+        np.ndarray: Frequencies in cm^-1
+    """
     return freqs * nrg_to_cm_conv  # Hartree to cm^-1
 
 
 def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, reverse: bool = False) -> np.ndarray:
+    """ Returns the Hessian projected onto or out of the subspace defined by the molecule sets.
+    
+    Args:
+        structure (Structure): pymatgen Structure
+        K (np.ndarray): Hessian matrix
+        molecule_sets (list[dict] | None): List of molecule sets to project out (or onto).
+        reverse (bool): If True, project onto the subspace instead of out of it.
+        
+    Returns:
+        np.ndarray: Projected Hessian matrix
+    """
     # TODO: Protect reverse from being fed an empty projector
     projector = get_projector(structure, molecule_sets=molecule_sets)
     if reverse:
@@ -55,32 +80,82 @@ def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dic
     return K_proj
 
 def get_omegaSq(structure: Structure, K: np.ndarray) -> np.ndarray:
+    """ Get mass-weighted Hessian.
+
+    Args:
+        structure (Structure): pymatgen Structure
+        K (np.ndarray): Hessian matrix
+
+    Returns:
+        np.ndarray: Mass-weighted Hessian matrix
+    """
     invsqrtM = get_invsqrtM(structure)
     omegaSq = np.dot(invsqrtM, np.dot(K, invsqrtM))
     return omegaSq
 
-def solve_vib_modes(structure: Structure, K: np.ndarray):
-    omegaSq = get_omegaSq(structure, K)
-    omegaSqEigs, omegaSqEvecs = np.linalg.eigh(omegaSq)
+def solve_vib_modes(structure: Structure, K: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """ Get vibrational modes and eigenvalues from Hessian and its structure.
+    
+    Args:
+        structure (Structure): pymatgen Structure
+        K (np.ndarray): Hessian matrix
+        
+    Returns:
+        tuple[np.ndarray, np.ndarray]: eigenvalues and eigenvectors of Hessian converted to mass-weighted coordinates"""
+    omegaSqEigs, omegaSqEvecs = np.linalg.eigh(get_omegaSq(structure, K))
     return omegaSqEigs, omegaSqEvecs
 
 
-def get_free_idcs(structure):
+def get_free_idcs(structure: Structure) -> list[int]:
+    """ Get the indices of free atoms in the structure based on selective dynamics flags.
+    
+    Args:
+        structure (Structure): pymatgen Structure
+        
+    Returns:
+        list[int]: List of indices of free atoms
+    """
     sel_dyn = structure.site_properties.get("selective_dynamics", None)
     if sel_dyn is None:
         return list(range(len(structure)))
     free_idcs = [i for i, sd in enumerate(sel_dyn) if any(sd)]
     return free_idcs
 
-def read_K(calc_dir, structure, expand_to_full: bool = False):
-    # nAtoms = len(structure)
+def read_K(calc_dir: Path | str, structure: Structure, expand_to_full: bool = False, calc_prefix: str | None = None) -> np.ndarray:
+    """ Read the Hessian matrix from a JDFTx calculation directory.
+
+    Args:
+        calc_dir (Path | str): Path to the JDFTx calculation directory
+        structure (Structure): pymatgen Structure
+        expand_to_full (bool): Whether to expand the Hessian to include fixed atoms
+        calc_prefix (str | None): Prefix for the calculation files
+    
+    Returns:
+        np.ndarray: Hessian matrix
+    """
+    if calc_prefix is None:
+        calc_prefix = ""
+    elif not calc_prefix.endswith("."):
+        calc_prefix += "."
     nAtoms = len(get_free_idcs(structure))
-    K = np.fromfile(calc_dir / "K", dtype=np.complex128).reshape((nAtoms*3, nAtoms*3)).real
+    K = np.fromfile(Path(calc_dir) / f"{calc_prefix}K", dtype=np.complex128).reshape((nAtoms*3, nAtoms*3)).real
     if expand_to_full:
         K = expand_K(K, structure)
     return K
 
-def expand_K(K_small, structure):
+def expand_K(K_small: np.ndarray, structure: Structure) -> np.ndarray:
+    """ Expand a reduced Hessian to the full Hessian including fixed atoms.
+    
+    Expand a reduced Hessian matrix to the full Hessian matrix by inserting zero rows and columns for the fixed 
+    atoms as specified by the selective dynamics flags in the structure.
+    
+    Args:
+        K_small (np.ndarray): Reduced Hessian matrix
+        structure (Structure): pymatgen Structure
+    
+    Returns:
+        np.ndarray: Full Hessian matrix
+    """
     nAtoms = len(structure)
     full_size = nAtoms * 3
     K_full = np.zeros((full_size, full_size))
@@ -92,7 +167,18 @@ def expand_K(K_small, structure):
             K_full[i_full*3:(i_full+1)*3, j_full*3:(j_full+1)*3] = K_small[i_small*3:(i_small+1)*3, j_small*3:(j_small+1)*3]
     return K_full
 
-def reduce_K(K_full, structure):
+def reduce_K(K_full: np.ndarray, structure: Structure) -> np.ndarray:
+    """ Reduce a full Hessian to only the free atoms.
+
+    Reduce a full Hessian matrix to only the free atoms as specified by the selective dynamics flags in the structure.
+    
+    Args:
+        K_full (np.ndarray): Full Hessian matrix
+        structure (Structure): pymatgen Structure
+    
+    Returns:
+        np.ndarray: Reduced Hessian matrix
+    """
     free_idcs = get_free_idcs(structure)
     nFree = len(free_idcs)
     K_small = np.zeros((nFree*3, nFree*3))
@@ -101,12 +187,12 @@ def reduce_K(K_full, structure):
             K_small[i_small*3:(i_small+1)*3, j_small*3:(j_small+1)*3] = K_full[i_full*3:(i_full+1)*3, j_full*3:(j_full+1)*3]
     return K_small
 
-def get_reduced_structure(structure):
+def get_reduced_structure(structure: Structure) -> Structure:
     free_idcs = get_free_idcs(structure)
     reduced_structure = Structure.from_sites([site for i, site in enumerate(structure.sites) if i in free_idcs])
     return reduced_structure
 
-def solve_vib_modes(structure: Structure, K_proj: np.ndarray):
+def solve_vib_modes(structure: Structure, K_proj: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """ Solve for vibrational modes with a cleaned Hessian.
 
     Args:
@@ -160,8 +246,6 @@ def get_structure_for_gaussian_vib_log(structure: Structure, freqs_cm: np.ndarra
 def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False) -> tuple[np.ndarray, np.ndarray]:
     infile = JDFTXInfile.from_file(calc_dir / "in")
     structure = infile.structure
-    # This is vestigial from when "trans" and "rot" args were present for "get_projected_K" - should we still do something with this?
-    fixed = (len(get_free_idcs(structure)) != len(structure))
     K = get_projected_K(structure, read_K(calc_dir, structure, expand_to_full=True), molecule_sets=molecule_sets, reverse=reverse)
     K = reduce_K(K, structure)
     substructure = get_reduced_structure(structure)
@@ -177,11 +261,6 @@ def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | No
         structure = JDFTXInfile.from_file(calc_dir / "in").structure
     else:
         structure = JDFTXOutfile.from_file(calc_dir / "out").structure
-    fixed = (len(get_free_idcs(structure)) != len(structure))
-    # if proj_trans is None:
-    #     proj_trans = not fixed
-    # if proj_rot is None:
-    #     proj_rot = not fixed
     K = get_projected_K(
         structure, 
         read_K(calc_dir, structure, expand_to_full=True), 
@@ -277,6 +356,20 @@ def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: lis
     return pert_structure
 
 def pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3) -> Structure:
+    """ Perturb structure along all imaginary frequency modes.
+    
+    Args:
+        structure (Structure): Unperturbed pymatgen Structure
+        K (np.ndarray): Hessian matrix
+        molecule_sets (list[dict] | None): List of molecule sets to project out.
+        disps (float | list[float]): displacement magnitude(s) (negative values perturb in opposite direction)
+            Providing a single float applies the same displacement to all modes.
+            A list of floats longer than the number of imaginary modes will be truncated.
+        zero_thresh (float): threshold for identifying imaginary frequencies in cm^-1
+        
+    Returns:
+        Structure: perturbed structure
+    """
     try:
         pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh)
     except ValueError as e:
