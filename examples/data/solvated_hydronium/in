@@ -1,0 +1,56 @@
+latt-scale 1 1 1 
+latt-move-scale 0.0 0.0 0.0 
+coords-type Lattice 
+lattice \
+    18.897260999996 0.000000000000 0.000000000000 \
+    0.000000000000 18.897260999996 0.000000000000 \
+    0.000000000000 0.000000000000 18.897260999996 
+ion O 0.453368353716 0.499823877063 0.609794682240 1 
+ion O 0.554294651689 0.549952387800 0.388249472703 1 
+ion O 0.518894102494 0.278427442627 0.701551977198 1 
+ion H 0.472802861002 0.571594969507 0.675198712007 1 
+ion H 0.486713600183 0.405183465435 0.649952148811 1 
+ion H 0.502021415223 0.522425698132 0.516067299155 1 
+ion H 0.607561235370 0.475617265171 0.351180207305 1 
+ion H 0.614151025290 0.628390295095 0.387720559696 1 
+ion H 0.569173832333 0.284540793691 0.786267147230 1 
+ion H 0.575445524519 0.225045758095 0.640823557726 1 
+core-overlap-check none 
+ion-species /dummy_path/GBRV/O.uspp 
+ion-species /dummy_path/GBRV/H.uspp 
+
+kpoint 0.000000000000 0.000000000000 0.000000000000 1.000000000000 
+kpoint-folding 1 1 1 
+
+van-der-waals D3 
+elec-cutoff 20.0 
+elec-smearing Fermi 0.001 
+elec-n-bands 22 
+spintype z-spin 
+elec-initial-magnetization 0.0 no 
+elec-initial-charge -1.0 
+converge-empty-states yes 
+
+initial-state $VAR 
+
+lcao-params 30 
+ionic-minimize \
+    nIterations  0 
+fluid-minimize \
+    knormThreshold  1e-13 
+
+fluid LinearPCM 
+fluid-solvent H2O 
+fluid-anion F- 0.1 
+fluid-cation K+ 0.1 
+pcm-variant CANDLE 
+
+vibrations centralDiff  yes useConstraints  no dumpK  yes 
+
+dump-name $VAR 
+band-projection-params yes no 
+dump End  State 
+dump End  BandEigs  BandProjections  Fillings  Kpoints 
+dump End  Ecomponents 
+dump End  ElecDensity 
+
