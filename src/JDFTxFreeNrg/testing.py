@@ -9,6 +9,7 @@ import requests
 import inspect
 from os import remove
 import pickle
+from pymatgen.core import Structure
 
 def anl_spheres_area(rs: list[float], centers: list[np.ndarray]) -> float:
     assert len(rs) == len(centers), "Number of radii must match number of centers."
@@ -593,4 +594,7 @@ def get_freesolv_database(version='0.51'):
 # test_solve_entropy_trans(nsampless=nsampless)
 # test_relative_solve_entropy_trans(nsampless=nsampless)
 
-
+def gen_random_structure(natoms: int, unit_cell_magnitude: float = 10.) -> Structure:
+    coords = np.random.random((natoms, 3))
+    struc = Structure(np.eye(3)*unit_cell_magnitude, list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
+    return struc

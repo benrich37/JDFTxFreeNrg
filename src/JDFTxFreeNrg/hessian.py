@@ -64,7 +64,7 @@ def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dic
     
     Args:
         structure (Structure): pymatgen Structure
-        K (np.ndarray): Hessian matrix
+        K (np.ndarray): Hessian matrix in full form.
         molecule_sets (list[dict] | None): List of molecule sets to project out (or onto).
         reverse (bool): If True, project onto the subspace instead of out of it.
         
@@ -127,7 +127,7 @@ def read_K(calc_dir: Path | str, structure: Structure, expand_to_full: bool = Fa
     Args:
         calc_dir (Path | str): Path to the JDFTx calculation directory
         structure (Structure): pymatgen Structure
-        expand_to_full (bool): Whether to expand the Hessian to include fixed atoms
+        expand_to_full (bool): Whether to expand the Hessian to include fixed atoms (currently expected by all projection functions)
         calc_prefix (str | None): Prefix for the calculation files
     
     Returns:
@@ -188,6 +188,14 @@ def reduce_K(K_full: np.ndarray, structure: Structure) -> np.ndarray:
     return K_small
 
 def get_reduced_structure(structure: Structure) -> Structure:
+    """ Get a reduced structure containing only the free atoms.
+    
+    Args:
+        structure (Structure): pymatgen Structure
+        
+    Returns:
+        Structure: Reduced pymatgen Structure
+    """
     free_idcs = get_free_idcs(structure)
     reduced_structure = Structure.from_sites([site for i, site in enumerate(structure.sites) if i in free_idcs])
     return reduced_structure
@@ -280,8 +288,20 @@ def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None 
     return freqs
 
 
-def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, zero_thresh: float = 1e-3, use_in: bool = True):
-    omegaSqEigs, omegaSqEvecs, evecs = get_omegaSqEigs_evecs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse)
+def write_Gaussian_vib_log_from_calc_dir(log_path: Path, calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, zero_thresh: float = 1e-3, use_in: bool = True) -> None:
+    """ Write a Gaussian-format vibrational log file from a JDFTx calculation directory.
+
+    Helpful for debugging vibrational modes / constructing required projector sets.
+    
+    Args:
+        log_path (Path): Path to write the Gaussian vibrational log file to
+        calc_dir (Path): Path to the JDFTx calculation directory
+        molecule_sets (list[dict] | None): List of molecule sets to project out (or onto).
+        reverse (bool): If True, project onto the subspace instead of out of it.
+        zero_thresh (float): Threshold for identifying zero frequencies in cm^-1
+        use_in (bool): Whether to read the structure from the "in" file (True) or "out" file (False)
+    """
+    omegaSqEigs, omegaSqEvecs, _ = get_omegaSqEigs_evecs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse)
     if use_in:
         structure = JDFTXInfile.from_file(calc_dir / "in").structure
     else:
@@ -330,6 +350,15 @@ def pert_along_vib_mode(structure: Structure, omegaSqEvecs: np.ndarray, mode_idx
 
 # TODO: Use this function in pre-existing functions that perform this operation
 def get_imaginary_mode_idcs(freqs: list[np.complex128], zero_thresh: 1e-3) -> list[int]:
+    """ Get the indices of the frequencies that are imaginary.
+    
+    Args:
+        freqs (list[np.complex128]): List of frequencies in cm^-1
+        zero_thresh (float): threshold for identifying imaginary frequencies in cm^-1
+
+    Returns:
+        list[int]: List of indices of imaginary frequencies
+    """
     imag_mode_idcs = [i for i, f in enumerate(freqs) if abs(f.imag) >= zero_thresh]
     return imag_mode_idcs
 
