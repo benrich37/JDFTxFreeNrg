@@ -163,30 +163,47 @@ def gen_ortho_axes_R3(axis: np.ndarray) -> list[np.ndarray]:
 
 
 
-
 def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray | dict) -> list[np.ndarray]:
+    axis_data, gen_ortho_set = _resolve_axis_data(axis)
+    axis_vec = _axis_data_to_vector(structure, axis_data)
+    if gen_ortho_set:
+        return gen_ortho_axes_R3(axis_vec)
+    else:
+        return [axis_vec]
+    
+def _resolve_axis_data(axis: str | list[int] | np.ndarray | dict) -> tuple[np.ndarray, bool]:
     axis_data = axis
     gen_ortho_set = False
     if isinstance(axis, dict):
         gen_ortho_set = axis.get("ortho", False)
-        axis_data = axis.get("axis", None)
-        assert axis_data is not None, "An axis provided as a dictionary must provide axis data (str, list[int], np.ndarray) under the key 'axis'."
-    axis_vec = resolve_axis_no_ortho(structure, axis_data)
-    if gen_ortho_set:
-        ortho_axes = gen_ortho_axes_R3(axis_vec)
-        return ortho_axes
-    else:
-        return [axis_vec]
+        if not "axis" in axis:
+            raise ValueError("An axis provided as a dictionary must provide axis data (str, list[int], np.ndarray) under the key 'axis'.")
+        axis_data = axis["axis"]
+    return axis_data, gen_ortho_set
 
-def resolve_axis_no_ortho(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
+def _axis_data_to_vector(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
     if isinstance(axis, np.ndarray):
+        if not np.shape(axis) in [(3,), (3,1)]:
+            raise ValueError(
+                f"Axis numpy array must be shape (3,), got shape {np.shape(axis)} "
+                "(if you were trying to provide multiple axes, use a list of arrays instead."
+                "If you were trying to provide indices, use a list of two integers instead.)"
+                )
         return axis
     elif isinstance(axis, str):
+        if not axis in ref_axs:
+            raise ValueError(f"Unknown named axis: {axis}. Valid options are: {list(ref_axs.keys())}")
         return ref_axs[axis]
     elif isinstance(axis, list):
+        if not all([isinstance(i, int) for i in axis]):
+            raise TypeError(f"Axis list must contain integers, got: {axis}")
+        if len(axis) != 2:
+            raise ValueError(f"Axis list must contain exactly two indices, got: {axis}")
         p0 = structure.cart_coords[axis[0]]
         p1 = structure.cart_coords[axis[1]]
         return p1 - p0
+    else:
+        raise TypeError(f"Unexpected axis data type: {type(axis)}")
     
 def resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
     try:
@@ -234,7 +251,6 @@ def _resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
                 resolved_axes = []
                 for axis in axes:
                     resolve_axes += resolve_axis(structure, axis)
-                    # resolved_axes.append(resolve_axis(structure, axis))
             mset["axes"] = resolved_axes
 
 

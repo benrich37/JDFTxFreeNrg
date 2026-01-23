@@ -1,14 +1,11 @@
 import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
+from JDFTxFreeNrg.testing import gen_random_structure
 from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs
 import numpy as np
 from pymatgen.core import Structure
 
-def gen_random_structure(natoms: int, unit_cell_magnitude: float = 10.) -> Structure:
-    coords = np.random.random((natoms, 3))
-    struc = Structure(np.eye(3)*unit_cell_magnitude, list(["H" for _ in range(natoms)]), coords, coords_are_cartesian=True)
-    return struc
 
 @pytest.mark.parametrize(
         ("natoms", "disp"),
