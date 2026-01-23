@@ -250,7 +250,7 @@ def _resolve_axes(structure: Structure, molecule_sets: list[dict]) -> None:
             else:
                 resolved_axes = []
                 for axis in axes:
-                    resolve_axes += resolve_axis(structure, axis)
+                    resolved_axes += resolve_axis(structure, axis)
             mset["axes"] = resolved_axes
 
 

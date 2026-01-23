@@ -1,4 +1,4 @@
-from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs
+from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs, resolve_axes
 from JDFTxFreeNrg.testing import gen_random_structure
 from typing import Any
 import numpy as np
@@ -132,3 +132,24 @@ def test_resolve_axis_invalid_inputs(axis: Any, exception: Exception):
     structure = gen_random_structure(5)
     with pytest.raises(exception):
         resolve_axis(structure, axis)
+
+def test_resolve_axes():
+    structure = gen_random_structure(5)
+    molecule_sets = [
+        {
+            "name": "molecule1",
+            "axes": [
+                "x",
+                [0, 1],
+                np.array([0.0, 1.0, 0.0]),
+                {"axis": "y", "ortho": True},
+                {"axis": [2, 3], "ortho": False},
+            ]
+        }
+    ]
+    resolve_axes(structure, molecule_sets)
+    axes = molecule_sets[0]["axes"]
+    assert len(axes) == 6, f"Expected 6 resolved axes in molecule set, got {len(axes)}"
+    for i, ax in enumerate(axes):
+        assert ax.ndim == 1, f"Resolved axis {i} is not 1D (ndim {ax.ndim})"
+        assert isinstance(ax, np.ndarray), f"Resolved axis {i} is not a numpy array (type {type(ax)})"
