@@ -2,7 +2,10 @@ import pytest
 from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
 from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
 from JDFTxFreeNrg.testing import gen_random_structure
-from JDFTxFreeNrg.hessian import pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs
+from JDFTxFreeNrg.hessian import (
+    pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs,
+    _pert_along_im_freqs_disp_vec_constructor
+)
 import numpy as np
 from pymatgen.core import Structure
 
@@ -90,6 +93,21 @@ def test_pert_along_im_freqs_helper(natoms: int, zero_thresh: float):
     # Warning for too many displacements
     with pytest.warns(UserWarning):
         _pert_along_im_freqs_helper(struc, K_proj, disps=[0.1]*(len(im_eig_idcs)+2), zero_thresh=zero_thresh)
+
+
+
+@pytest.mark.parametrize(
+        ("natoms", "nvecs", "disp"),
+        [
+            (5, 2, 0.1),
+            (8, 3, 0.05),
+        ]
+)
+def test_pert_along_im_freqs_disp_vec_constructor_max_method(natoms: int, nvecs: int, disp: float):
+    use_vectors = [np.random.random((natoms, 3)) for _ in range(nvecs)]
+    dvec = _pert_along_im_freqs_disp_vec_constructor(use_vectors, disp, norm_method="max")
+    assert np.isclose(np.max(np.linalg.norm(dvec, axis=1)), disp)
+
 
 
 @pytest.mark.parametrize(

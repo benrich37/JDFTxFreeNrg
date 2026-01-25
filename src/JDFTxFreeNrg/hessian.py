@@ -420,14 +420,14 @@ def _pert_along_im_freqs_helper(structure: Structure, K_proj: np.ndarray, disps:
 
 
 
-def _pert_along_im_freqs_get_disp_list(disps: float | list[float], imag_mode_idcs: list[int]) -> list[float]:
+def _pert_along_im_freqs_get_disp_list(disps: float | list[float], n_vectors: int) -> list[float]:
     if isinstance(disps, float):
-        disp_list = [disps] * len(imag_mode_idcs)
-    elif len(disps) > len(imag_mode_idcs):
-        warn(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}). Truncating displacements list.", stacklevel=2)
-        disp_list = disps[:len(imag_mode_idcs)]
-    elif len(disps) < len(imag_mode_idcs):
-        raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({len(imag_mode_idcs)}).")
+        disp_list = [disps] * n_vectors
+    elif len(disps) > n_vectors:
+        warn(f"Warning: More displacements provided ({len(disps)}) than imaginary modes found ({n_vectors}). Truncating displacements list.", stacklevel=2)
+        disp_list = disps[:n_vectors]
+    elif len(disps) < n_vectors:
+        raise ValueError(f"Error: Fewer displacements provided ({len(disps)}) than imaginary modes found ({n_vectors}).")
     else:
         disp_list = disps.copy()
     return disp_list
@@ -437,9 +437,7 @@ def _pert_along_im_freqs_get_norm_vib_vecs(omegaSqEvecs: np.ndarray, nAtoms: int
     norm_vib_vecs = [v / np.linalg.norm(v) for v in vib_vecs]
     return norm_vib_vecs
 
-
-def _pert_along_im_freqs_get_dvec(
-        structure: Structure, K: np.ndarray, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3, cumulative_displacement: bool = False) -> np.ndarray:
+def _pert_along_im_freqs_get_use_vectors(structure: Structure, K: np.ndarray, zero_thresh: float = 1e-3) -> list[np.ndarray]:
     nAtoms = len(structure)
     omegaSqEigs, omegaSqEvecs = solve_vib_modes(structure, K)
     freqs = freq_nrg_to_cm(get_freqs(omegaSqEigs))
@@ -447,28 +445,41 @@ def _pert_along_im_freqs_get_dvec(
     if len(imag_mode_idcs) == 0:
         raise ValueError("No imaginary frequency modes found to perturb along.")
     norm_vib_vecs = _pert_along_im_freqs_get_norm_vib_vecs(omegaSqEvecs, nAtoms)
-    dvec = np.zeros((nAtoms, 3))
-    disp_list = _pert_along_im_freqs_get_disp_list(disps, imag_mode_idcs)
-    for i, mode_idx in enumerate(imag_mode_idcs):
-        dvec += disp_list[i] * norm_vib_vecs[mode_idx]
-    if cumulative_displacement:
-        assert isinstance(disps, float), "cumulative_displacement=True requires disps to be a single float value."
+    use_vectors = [norm_vib_vecs[i] for i in imag_mode_idcs]
+    return use_vectors
+
+def _pert_along_im_freqs_disp_vec_constructor(use_vectors: list[np.ndarray], disps: float | list[float], norm_method: str = "default") -> np.ndarray:
+    dvec = np.zeros(use_vectors[0].shape)
+    disp_list = _pert_along_im_freqs_get_disp_list(disps, len(use_vectors))
+    for i, vec in enumerate(use_vectors):
+        dvec += disp_list[i] * vec
+    if norm_method.lower().startswith("c"):
+        assert isinstance(disps, float), "cumulative norm_method requires disps to be a single float value."
         dvec *= disps / np.linalg.norm(dvec)
+    elif norm_method.lower().startswith("m"):
+        assert isinstance(disps, float), "max norm_method requires disps to be a single float value."
+        max_disp = np.max(np.linalg.norm(dvec, axis=1))
+        dvec *= disps / max_disp
     return dvec
 
 
-def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3, cumulative_displacement: bool = False) -> Structure:
+def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, zero_thresh: float = 1e-3, norm_method: str | None = None) -> Structure:
     K_proj = get_projected_K(structure, K, molecule_sets=molecule_sets)
-    if cumulative_displacement and isinstance(disps, list):
-        raise ValueError("cumulative_displacement=True requires disps to be a single float value.")
-    dvec = _pert_along_im_freqs_get_dvec(structure, K_proj, disps=disps, zero_thresh=zero_thresh, cumulative_displacement=cumulative_displacement)
+    if norm_method is None:
+        norm_method = "default"
+    if norm_method.lower().startswith("c") and isinstance(disps, list):
+        raise ValueError("'cumulative' norm_method requires disps to be a single float value.")
+    use_vectors = _pert_along_im_freqs_get_use_vectors(structure, K_proj, zero_thresh=zero_thresh)
+    dvec = _pert_along_im_freqs_disp_vec_constructor(use_vectors, disps, norm_method=norm_method)
     pert_structure = _pert_along_vec(structure, dvec)
     return pert_structure
 
 def pert_along_im_freqs(
         structure: Structure, K: np.ndarray, 
         molecule_sets: list[dict] | None = None, disps: float | list[float] = 0.1, 
-        zero_thresh: float = 1e-3, cumulative_displacement: bool = False) -> Structure:
+        zero_thresh: float = 1e-3,
+        norm_method: str | None = None,
+        ) -> Structure:
     """ Perturb structure along all imaginary frequency modes.
     
     Args:
@@ -479,14 +490,16 @@ def pert_along_im_freqs(
             Providing a single float applies the same displacement to all modes.
             A list of floats longer than the number of imaginary modes will be truncated.
         zero_thresh (float): threshold for identifying imaginary frequencies in cm^-1
-        cumulative_displacement (bool): If True, magnitude of perturbation displacement is set cumulatively along all imaginary modes. (Requires disps to be a single float.)
-            If False, each mode is perturbed by the specified displacement independently.
+        norm_method (str | None): Method for normalizing the perturbation vector. Options are:
+            None: Length of each imaginary mode vector is set to value in disps (default behavior).
+            "cumulative": Length of total perturbation vector is set to value in disps.
+            "max": Displacement of the atom with the largest displacement is set to value in disps.
         
     Returns:
         Structure: perturbed structure
     """
     try:
-        pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh, cumulative_displacement=cumulative_displacement)
+        pert_structure = _pert_along_im_freqs(structure, K, molecule_sets=molecule_sets, disps=disps, zero_thresh=zero_thresh, norm_method=norm_method)
     except ValueError as e:
         print("Error generating structure perturbed along imaginary frequencies")
         raise e
