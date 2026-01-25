@@ -1,4 +1,7 @@
-Includes implementation of the quasi-rigid rotor harmonic oscillator (QRRHO) approach for vibrational entropies (Grimme, 2012) and enthalpies (Li, Head-Gordon, 2014).
+Python library for improving free energy analysis for solvated surface DFT calculatios. Includes:
+- User-friendly methods for projecting out internal and external degrees of freedom from a Hessian to eliminate spurious imaginary frequencies
+- Quasi-rigid rotor harmonic oscillator (QRRHO) model entropies (Grimme, 2012) and enthalpies (Li, Head-Gordon, 2014)
+- Implementation of terms for solvated translational, rotational, and cavity entropies (Garza, 2019)
 
 # Outline
 
@@ -21,4 +24,5 @@ This includes the enthalpy of a single free rotational degree of freedom, the st
 ## Vibrational Frequencies
 
 Includes functions to read the hessian dumped in a JDFTx vibrational analysis calculation, project out specified rotations and translation of subspecies from the computed system, and extract vibrational frequencies.
+
 
