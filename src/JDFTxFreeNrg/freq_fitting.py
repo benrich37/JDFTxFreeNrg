@@ -1,10 +1,13 @@
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
+from pymatgen.core.trajectory import Trajectory
 from pathlib import Path
 import numpy as np
 from JDFTxFreeNrg.hessian import freq_nrg_to_cm
 from ase.units import Hartree, Bohr
 from scipy import constants as const
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from sklearn.metrics import r2_score
 
 
 def get_freq_from_scan_outfile(
@@ -26,6 +29,29 @@ def get_freq_from_scan_outfile(
     # Assumes the scan moves linearly along the reaction coordinate
     outfile = JDFTXOutfile.from_file(outfile_path)
     traj = outfile.trajectory
+    return get_freq_from_scan_traj(
+        traj, i_min=i_min, i_max=i_max, target_disp=target_disp, plot_fit=plot_fit, conv_disp=conv_disp, anh=anh,
+        save_dir=Path(outfile_path).parent
+    )
+
+
+def get_freq_from_scan_traj(
+        traj: Trajectory, i_min: int | None = None, i_max: int | None = None, 
+        target_disp: float = 0.005, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True,
+        save_dir: Path | str | None = None
+        ) -> float:
+    """Extract frequency from JDFTX scan outfile by fitting quadratic to energy vs displacement.
+    
+    Args:
+        traj (Trajectory): Pymatgen Trajectory with "energy" in frame_properties.
+        i_min (int | None): Minimum index for fitting. If None, determined from target_disp.
+        i_max (int | None): Maximum index for fitting. If None, determined from target_disp.
+        target_disp (float): Target Cartesian displacement in Bohr to determine fitting range.
+        plot_fit (bool): Whether to save a plot the fit to the outfile_path's parent.
+    
+    Returns:
+        float: Frequency in cm^-1.
+    """
     disps, energies, unweighted_disps = get_mass_weighted_displacements(traj, sort=True, add_unweighted=True)
     if conv_disp:
         target_disp = np.sqrt(2*(target_disp / Bohr)**2)
@@ -39,7 +65,7 @@ def get_freq_from_scan_outfile(
     coefs, r2 = fit_quadratic_to_slice(disps, energies, i_min, i_max, anh=anh)
     freq_cm = fit_coefs_to_freq_cm(coefs)
     if plot_fit:
-        plot_scan_fit(Path(outfile_path).parent, disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh)
+        plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh)
     return freq_cm
 
 
@@ -136,15 +162,7 @@ def get_signed_displacement_magnitudes(cart_coords_list, energies):
         cum_displacements[idx] = cum_displacements[idx + 1] + displacements_signs[idx] * displacements_magnitudes[idx]
     return cum_displacements
 
-from scipy.optimize import curve_fit
-from sklearn.metrics import r2_score
 
-# def quadratic(x, a, b, c):
-#     return a * x**2 + b * x + c
-
-# def fit_quadratic(x, y):
-#     coeffs, covariance = curve_fit(quadratic, x, y)
-#     return coeffs, covariance
 
 def quadratic(x, a, b, c):
     return a * x**2 + b*x + c
