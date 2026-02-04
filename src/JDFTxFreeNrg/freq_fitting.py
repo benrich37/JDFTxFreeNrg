@@ -98,6 +98,9 @@ def plot_scan_fit(save_dir: Path, disps, unweighted_disps, energies, i_min, i_ma
     twiny.legend()
     fig.savefig(save_dir / "scan_fit.png", dpi=300)
 
+
+# TODO: This is analogous to the cumalative displacement from a numeric Hessian only for scans involving two atoms.
+# This should be replaced with something that detects how many atoms are being displaced in the scan and normalizes the target displacement accordingly.
 def get_target_imin(nonweighted_disps: list[float], target_disp: float, i0: int) -> int:
     _idcs = _get_target___idcs(nonweighted_disps, target_disp, i0)
     idcs = [idx for idx in _idcs if idx < i0]
