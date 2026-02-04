@@ -120,12 +120,19 @@ def test_pert_along_im_freqs_disp_vec_constructor_max_method(natoms: int, nvecs:
 def test_pert_along_im_freqs(natoms: int, zero_thresh: float):
     # TODO: Hard-code in a Hessian with known imaginary modes to test the functionality
     struc = gen_random_structure(natoms)
+    struc_coords = struc.cart_coords.copy()
     K_proj, im_freq_idcs = get_K_proj_with_atleast_n_im_freqs(struc, 2, zero_thresh=zero_thresh)
     # Works normally with default settings
     pert_struc = pert_along_im_freqs(struc, K_proj)
     # Still raises the value error - how can we check the print statement informing the user of the location of the error?
     with pytest.raises(ValueError):
         pert_struc = pert_along_im_freqs(struc, K_proj, disps=[0.1])  # Too few displacements
+    with pytest.raises(ValueError):
+        pert_struc = pert_along_im_freqs(struc, K_proj, norm_method="cumulative", disps=[0.1, 0.2])  # Too few displacements for cumulative method
+    with pytest.raises(ValueError):
+        pert_struc = pert_along_im_freqs(struc, K_proj, norm_method="max", disps=[0.1, 0.2])  # Too few displacements for cumulative method
+    max_method_coords = pert_along_im_freqs(struc, K_proj, norm_method="max", disps=0.1).cart_coords
+    max_dvec = max_method_coords - struc_coords
 
 
 

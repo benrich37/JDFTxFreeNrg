@@ -99,6 +99,21 @@ def get_center_of_mass(structure: Structure) -> np.ndarray:
     CM /= total_mass
     return CM
 
+def get_rotation_vector(axis: np.ndarray, structure: Structure, mol_indices: list[int] | None = None) -> np.ndarray:
+    if mol_indices is None:
+        mol_indices = list(range(len(structure.sites)))
+    modes = get_modes(structure)
+    CMcoords = get_CMcoords(structure)
+    return _get_rotation_vector(axis, modes, CMcoords, mol_indices)
+
+def _get_rotation_vector(axis: np.ndarray, modes: list[Mode], CMcoords: np.ndarray, mol_indices: list[int]) -> np.ndarray:
+    vec = np.zeros(len(modes))
+    for i, mode in enumerate(modes):
+        if mode.iAtom in mol_indices:
+            vec[i] = box(modes[i].n, axis.T, CMcoords[mol_indices.index(modes[i].iAtom)])
+    return vec
+
+
 # TODO: Partition out individual operations being performed within this function into helper functions for testing and clarity
 def get_rotations_molecule(
         modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5,
@@ -116,10 +131,7 @@ def get_rotations_molecule(
                 axes.append(remove_phase(3, Ievecs[:, j]).real)
     projectors = []
     for j, axis in enumerate(axes):
-        vec = np.zeros(len(modes))
-        for i, mode in enumerate(modes):
-            if mode.iAtom in mol_indices:
-                vec[i] = box(modes[i].n, axis.T, CMcoords[mol_indices.index(modes[i].iAtom)])
+        vec = _get_rotation_vector(axis, modes, CMcoords, mol_indices)
         _error_on_nan_in_array(np.array(vec), context=f"rotation projector for axis {j}")
         projectors.append(vec)
     if ortho:

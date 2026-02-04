@@ -453,11 +453,11 @@ def _pert_along_im_freqs_disp_vec_constructor(use_vectors: list[np.ndarray], dis
     disp_list = _pert_along_im_freqs_get_disp_list(disps, len(use_vectors))
     for i, vec in enumerate(use_vectors):
         dvec += disp_list[i] * vec
+    if (norm_method.lower()[0] in ["c", "m"]) and (isinstance(disps, list)):
+        raise ValueError(f"'{norm_method}' norm_method requires disps to be a single float value.")
     if norm_method.lower().startswith("c"):
-        assert isinstance(disps, float), "cumulative norm_method requires disps to be a single float value."
         dvec *= disps / np.linalg.norm(dvec)
     elif norm_method.lower().startswith("m"):
-        assert isinstance(disps, float), "max norm_method requires disps to be a single float value."
         max_disp = np.max(np.linalg.norm(dvec, axis=1))
         dvec *= disps / max_disp
     return dvec
@@ -467,8 +467,8 @@ def _pert_along_im_freqs(structure: Structure, K: np.ndarray, molecule_sets: lis
     K_proj = get_projected_K(structure, K, molecule_sets=molecule_sets)
     if norm_method is None:
         norm_method = "default"
-    if norm_method.lower().startswith("c") and isinstance(disps, list):
-        raise ValueError("'cumulative' norm_method requires disps to be a single float value.")
+    # if norm_method.lower().startswith("c") and isinstance(disps, list):
+    #     raise ValueError("'cumulative' norm_method requires disps to be a single float value.")
     use_vectors = _pert_along_im_freqs_get_use_vectors(structure, K_proj, zero_thresh=zero_thresh)
     dvec = _pert_along_im_freqs_disp_vec_constructor(use_vectors, disps, norm_method=norm_method)
     pert_structure = _pert_along_vec(structure, dvec)
