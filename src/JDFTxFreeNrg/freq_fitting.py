@@ -12,7 +12,8 @@ from sklearn.metrics import r2_score
 
 def get_freq_from_scan_outfile(
         outfile_path: Path | str, i_min: int | None = None, i_max: int | None = None, 
-        target_disp: float = 0.005, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True
+        target_disp: float = 0.005, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True,
+        push_outer: bool = True, show_kT: bool = False, T: float = 300.0
         ) -> float:
     """Extract frequency from JDFTX scan outfile by fitting quadratic to energy vs displacement.
     
@@ -31,14 +32,14 @@ def get_freq_from_scan_outfile(
     traj = outfile.trajectory
     return get_freq_from_scan_traj(
         traj, i_min=i_min, i_max=i_max, target_disp=target_disp, plot_fit=plot_fit, conv_disp=conv_disp, anh=anh,
-        save_dir=Path(outfile_path).parent
+        save_dir=Path(outfile_path).parent, push_outer=push_outer, show_kT=show_kT, T=T
     )
 
 
 def get_freq_from_scan_traj(
         traj: Trajectory, i_min: int | None = None, i_max: int | None = None, 
-        target_disp: float = 0.005, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True,
-        save_dir: Path | str | None = None
+        target_disp: float = 0.03, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True,
+        save_dir: Path | str | None = None, push_outer: bool = True, show_kT: bool = False, T: float = 300.0
         ) -> float:
     """Extract frequency from JDFTX scan outfile by fitting quadratic to energy vs displacement.
     
@@ -54,18 +55,19 @@ def get_freq_from_scan_traj(
     """
     disps, energies, unweighted_disps = get_mass_weighted_displacements(traj, sort=True, add_unweighted=True)
     if conv_disp:
-        target_disp = np.sqrt(2*(target_disp / Bohr)**2)
+        target_disp = target_disp * Bohr
     if None in (i_min, i_max):
+        target_disp = get_pythagorean_disp_length(traj, target_disp)
         i0 = np.argmin(energies)
         if i_min is None:
-            i_min = get_target_imin(unweighted_disps, target_disp, i0)
+            i_min = get_target_imin(unweighted_disps, target_disp, i0, push_outer=push_outer)
         if i_max is None:
-            i_max = get_target_imax(unweighted_disps, target_disp, i0)
-        print(f"Determined fit range indices: i_min={i_min}, i_max={i_max} (i0={i0})")
+            i_max = get_target_imax(unweighted_disps, target_disp, i0, push_outer=push_outer)
     coefs, r2 = fit_quadratic_to_slice(disps, energies, i_min, i_max, anh=anh)
     freq_cm = fit_coefs_to_freq_cm(coefs)
     if plot_fit:
-        plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh)
+        nMoving = get_num_active_idcs_from_traj(traj)
+        plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh, nMoving=nMoving, show_kT=show_kT, T=T)
     return freq_cm
 
 
@@ -73,7 +75,10 @@ def fit_coefs_to_freq_cm(coefs: tuple[float, float]) -> float:
     return freq_nrg_to_cm(np.sqrt(coefs[0] * (Bohr**2 / Hartree)))
 
 
-def plot_scan_fit(save_dir: Path, disps, unweighted_disps, energies, i_min, i_max, coefs, typical_bohr_disp: float = 0.01, anh: bool = True):
+def plot_scan_fit(
+        save_dir: Path, disps, unweighted_disps, energies, i_min, i_max, coefs, typical_bohr_disp: float = 0.01, 
+        anh: bool = True, nMoving: int | None = None, show_kT: bool = False, T: float = 300.0
+        ):
     xs = np.linspace(disps[i_min], disps[i_max], 100)
     ys = quadratic(xs, *coefs) if anh else harmonic(xs, *coefs)
     fig, ax = plt.subplots()
@@ -83,15 +88,21 @@ def plot_scan_fit(save_dir: Path, disps, unweighted_disps, energies, i_min, i_ma
     ax.scatter(disps, energies, c="black", zorder=-1)
     ax.fill_betweenx([0, np.max(energies)], x1=disps[i_min], x2=disps[i_max], color="gray", alpha=0.1)
     twiny.fill_betweenx([0, np.max(energies)], x1=disps[i_min], x2=np.nan, color="gray", alpha=0.3, label="Fitted region")
-    twiny.fill_betweenx([0,0], x1=np.nan, x2=np.nan, color="red", alpha=0.3, label="Typical Cartesian displacement range")
+    # max_ang_disp = np.sqrt(2*(typical_bohr_disp / Bohr)**2)
+    if not nMoving is None:
+        max_ang_disp = _get_pythagorean_disp_length(nMoving, typical_bohr_disp * Bohr)
+        twiny.fill_betweenx([0, np.max(energies)], x1=-max_ang_disp, x2=max_ang_disp, color="red", alpha=0.1, label="Typical Cartesian displacement range")
+    # twiny.fill_betweenx([0,0], x1=np.nan, x2=np.nan, color="red", alpha=0.3, label="Typical Cartesian displacement range")
     freq_cm = fit_coefs_to_freq_cm(coefs)
     ax.plot(xs, ys, color="green", label=f"Fit freq: {freq_cm:.1f} cm$^{{-1}}$")
     twiny.plot(xs, ys*np.nan, color="green", label=f"Fit freq: {freq_cm:.1f} cm$^{{-1}}$")
+    if show_kT:
+        kT = const.k * T / const.e  # in eV
+        ax.axhline(y=np.min(energies) + kT, color="orange", linestyle="--", label=f"kT at {T} K")
+        twiny.axhline(y=np.min(energies) + kT, color="orange", linestyle="--", label=f"kT at {T} K")
     ax.set_ylabel("Energy (eV)")
-    ax.set_xlabel("Mass-weighted displacement (Å$\sqrt{{amu}}$)")
+    ax.set_xlabel(r"Mass-weighted displacement (Å $\sqrt{amu}$)")
     twiny.set_xlabel("Cartesian displacement (Å)")
-    max_ang_disp = np.sqrt(2*(typical_bohr_disp / Bohr)**2)
-    twiny.fill_betweenx([0, np.max(energies)], x1=-max_ang_disp, x2=max_ang_disp, color="red", alpha=0.1)
     twiny.plot(unweighted_disps, energies, c="black")
     xs = np.linspace(unweighted_disps[i_min], unweighted_disps[i_max], 100)
     twiny.plot(xs, ys, color="green")
@@ -101,15 +112,21 @@ def plot_scan_fit(save_dir: Path, disps, unweighted_disps, energies, i_min, i_ma
 
 # TODO: This is analogous to the cumalative displacement from a numeric Hessian only for scans involving two atoms.
 # This should be replaced with something that detects how many atoms are being displaced in the scan and normalizes the target displacement accordingly.
-def get_target_imin(nonweighted_disps: list[float], target_disp: float, i0: int) -> int:
+def get_target_imin(nonweighted_disps: list[float], target_disp: float, i0: int, push_outer: bool = True) -> int:
     _idcs = _get_target___idcs(nonweighted_disps, target_disp, i0)
     idcs = [idx for idx in _idcs if idx < i0]
-    return min(idcs[0], idcs[1])
+    if push_outer:
+        return min(idcs[0], idcs[1])
+    else:
+        return idcs[0]
 
-def get_target_imax(nonweighted_disps: list[float], target_disp: float, i0: int) -> int:
+def get_target_imax(nonweighted_disps: list[float], target_disp: float, i0: int, push_outer: bool = True) -> int:
     _idcs = _get_target___idcs(nonweighted_disps, target_disp, i0)
     idcs = [idx for idx in _idcs if idx > i0]
-    return max(idcs[0], idcs[1])
+    if push_outer:
+        return max(idcs[0], idcs[1])
+    else:
+        return idcs[0]
 
 def _get_target___idcs(nonweighted_disps: list[float], target_disp: float, i0: int):
     abs_nonweighted_disps = np.abs(np.array(nonweighted_disps))
@@ -118,6 +135,32 @@ def _get_target___idcs(nonweighted_disps: list[float], target_disp: float, i0: i
     _idcs = np.argsort(abs_dev_abs_nonweighted_disps)
     return _idcs
 
+def get_pythagorean_disp_length(traj: Trajectory, indiv_disp: float) -> float:
+    nMoving = get_num_active_idcs_from_traj(traj)
+    return _get_pythagorean_disp_length(nMoving, indiv_disp)
+
+def _get_pythagorean_disp_length(nMoving: int, indiv_disp: float) -> float:
+    return (nMoving * (indiv_disp ** 2)) ** (1/2)
+
+def get_num_active_idcs_from_traj(traj: Trajectory) -> int:
+    active_idcs = get_active_idcs_from_traj(traj)
+    return len(active_idcs)
+
+def get_active_idcs_from_traj(traj: Trajectory) -> list[int]:
+    active_idcs = np.zeros(len(traj[0]), dtype=bool)
+    for i in range(len(traj) - 1):
+        # disp_thresh should be determined by the scan to avoid complications from ultrafine scans
+        active_idcs = update_active_idcs_from_frame_pair(traj[i], traj[i + 1], active_idcs, disp_thresh=1e-5)
+    return list(np.where(active_idcs)[0])
+
+def update_active_idcs_from_frame_pair(frame1, frame2, active_idcs: np.ndarray, disp_thresh=1e-5) -> np.ndarray:
+    coords1 = frame1.cart_coords
+    coords2 = frame2.cart_coords
+    diffs = coords2 - coords1
+    norms = np.linalg.norm(diffs, axis=1)
+    moved_idcs = np.where(norms > disp_thresh)[0]
+    active_idcs[moved_idcs] = True
+    return active_idcs
 
 
 def get_mass_weighted_displacements(traj, sort=True, add_unweighted: bool = False):
@@ -210,3 +253,5 @@ def get_coef_fits(traj, d_min: int = 3, d_max: int = None):
         r2_list.append(r2)
         d_list.append(d)
     return coeffs_list, r2_list, d_list
+
+
