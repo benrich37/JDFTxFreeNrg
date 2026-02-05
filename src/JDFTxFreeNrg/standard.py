@@ -215,6 +215,18 @@ def get_enthalpy_vib(freq: float | np.ndarray, T: float) -> float:
     Returns:
         float: enthalpy in eV
     """
+    return np.sum(get_enthalpies_vib(freq, T))
+
+def get_enthalpies_vib(freq: float | np.ndarray, T: float) -> float | np.ndarray:
+    """ Return the HO vibrational enthalpy in eV.
+
+    Args:
+        freq (float): Vibrational frequency in cm^-1
+        T (float): temperature in K
+
+    Returns:
+        float: enthalpy in eV
+    """
     vt_over_T = freq * freq_to_vt / T
     return __get_ho_vib_enthalpies(vt_over_T, T) * k_ev
 
@@ -230,6 +242,18 @@ def _get_ho_vib_entropies(vt_over_t: float | np.ndarray) -> float:
     return vt_over_t / ((np.exp(vt_over_t) - 1)) - np.log(1 - np.exp(-vt_over_t))
 
 def get_entropy_vib(freq: float | np.ndarray, T: float) -> float:
+    """ Return the HO vibrational entropy in eV/K.
+
+    Args:
+        freq (float): Vibrational temperature
+        T (float): temperature in K
+
+    Returns:
+        float: entropy in eV/K
+    """
+    return np.sum(get_entropies_vib(freq, T))
+
+def get_entropies_vib(freq: float | np.ndarray, T: float) -> float | np.ndarray:
     """ Return the HO vibrational entropy in eV/K.
 
     Args:
