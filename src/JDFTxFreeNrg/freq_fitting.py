@@ -38,7 +38,7 @@ def get_freq_from_scan_outfile(
 
 def get_freq_from_scan_traj(
         traj: Trajectory, i_min: int | None = None, i_max: int | None = None, 
-        target_disp: float = 0.03, plot_fit: bool = True, conv_disp: bool = True, anh: bool = True,
+        target_disp: float = 0.03, plot_fit: bool = False, conv_disp: bool = True, anh: bool = True,
         save_dir: Path | str | None = None, push_outer: bool = True, show_kT: bool = False, T: float = 300.0
         ) -> float:
     """Extract frequency from JDFTX scan outfile by fitting quadratic to energy vs displacement.
