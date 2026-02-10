@@ -113,9 +113,10 @@ def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, 
     from pymatgen.io.ase import AseAtomsAdaptor
     if rotating_idcs is None:
         return None # Not enough data
-    subatoms = AseAtomsAdaptor.get_atoms(structure)[rotating_idcs]
+    subatoms = AseAtomsAdaptor.get_atoms(structure, msonable=False)[rotating_idcs]
     if rotation_axis is None:
-        return subatoms.get_moment_of_inertia()[2] # Assume greatest moment of inertia is the rotation axis
+        # return AseAtomsAdaptor.get_structure(subatoms).get_moments_of_inertia()[2]
+        return subatoms.get_moments_of_inertia()[2] # Assume greatest moment of inertia is the rotation axis
     axis = resolve_axis(structure, rotation_axis)[0] # convert to cart vector
     if len(np.shape(axis)) > 1:
         axis = axis[0, :] # Avoid the dot product retaining shape
