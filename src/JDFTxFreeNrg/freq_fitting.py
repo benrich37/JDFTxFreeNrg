@@ -1,5 +1,5 @@
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
-from pymatgen.core.trajectory import Trajectory
+from pymatgen.core.trajectory import Trajectory, Structure
 from pathlib import Path
 import numpy as np
 from JDFTxFreeNrg.hessian import freq_nrg_to_cm
@@ -57,7 +57,7 @@ def get_freq_from_scan_traj(
     disps, energies, unweighted_disps = get_mass_weighted_displacements(traj, sort=True, add_unweighted=True)
     if conv_disp:
         target_disp = target_disp * Bohr
-    i_min, i_max = _resolve_i_min_i_max(i_min, i_max, unweighted_disps, target_disp, energies, traj, push_outer)
+    i_min, i_max = _resolve_i_min_i_max(i_min, i_max, traj, energies, unweighted_disps, target_disp, push_outer)
     coefs, r2 = fit_quadratic_to_slice(disps, energies, i_min, i_max, anh=anh)
     freq_cm = fit_coefs_to_freq_cm(coefs)
     if plot_fit:
@@ -79,7 +79,8 @@ def get_rot_data_from_scan_traj(
         traj: Trajectory, rotating_idcs: list[int] | None = None, rotation_axis: np.ndarray | list[int] | str | None = None,
         i_min: int | None = None, i_max: int | None = None, 
         target_disp: float = 0.03, plot_fit: bool = False, conv_disp: bool = True, anh: bool = True,
-        save_dir: Path | str | None = None, push_outer: bool = True, show_kT: bool = False, T: float = 300.0
+        save_dir: Path | str | None = None, push_outer: bool = True, show_kT: bool = False, T: float = 300.0,
+        show_plot: bool = False
         ) -> tuple[float, float, int, float | None]:
     """Extract frequency from JDFTX scan outfile by fitting quadratic to energy vs displacement.
     
@@ -93,18 +94,18 @@ def get_rot_data_from_scan_traj(
     Returns:
         float: Frequency in cm^-1.
     """
-    disps, energies, unweighted_disps = get_mass_weighted_displacements(traj, sort=True, add_unweighted=True)
+    disps, energies, unweighted_disps = get_mass_weighted_displacements(traj, sort=False, add_unweighted=True)
     if conv_disp:
         target_disp = target_disp * Bohr
-    i_min, i_max = _resolve_i_min_i_max(i_min, i_max, unweighted_disps, target_disp, energies, traj, push_outer)
+    i_min, i_max = _resolve_i_min_i_max(i_min, i_max, traj, energies, unweighted_disps, target_disp, push_outer)
     coefs, r2 = fit_quadratic_to_slice(disps, energies, i_min, i_max, anh=anh)
     freq_cm = fit_coefs_to_freq_cm(coefs)
     barrier = get_barrier(energies)
     num_minima = len(get_minima_idcs(energies))
-    inertia = get_rotation_inertia(traj[0].structure, rotating_idcs, rotation_axis)
+    inertia = get_rotation_inertia(traj[0], rotating_idcs, rotation_axis)
     if plot_fit:
         nMoving = get_num_active_idcs_from_traj(traj)
-        plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh, nMoving=nMoving, show_kT=show_kT, T=T, show_hr_data=True)
+        plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh, nMoving=nMoving, show_kT=show_kT, T=T, show_hr_data=True, show_plot=show_plot)
     return freq_cm, barrier, num_minima, inertia
 
 def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, rotation_axis: np.ndarray | list[int] | str | None) -> float:
@@ -115,15 +116,17 @@ def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, 
     subatoms = AseAtomsAdaptor.get_atoms(structure)[rotating_idcs]
     if rotation_axis is None:
         return subatoms.get_moment_of_inertia()[2] # Assume greatest moment of inertia is the rotation axis
-    axis = resolve_axis(rotation_axis, structure) # convert to cart vector
+    axis = resolve_axis(structure, rotation_axis)[0] # convert to cart vector
+    if len(np.shape(axis)) > 1:
+        axis = axis[0, :] # Avoid the dot product retaining shape
     InertiaTensor = get_inertia_tensor(AseAtomsAdaptor.get_structure(subatoms))
-    return np.dot(axis, np.dot(InertiaTensor, axis)) # Return expectation value of inertia for axis
+    return np.dot(axis, np.dot(InertiaTensor, axis.T)) # Return expectation value of inertia for axis
 
 def get_minima_idcs(energies: list[float]) -> int:
     minima_indices, _ = find_peaks(np.array(energies) * -1)
     return minima_indices
 
-def get_barrier_idcs(energies: list[float]) -> int:
+def get_barrier_idcs(energies: list[float]) -> list[int]:
     minima_indices, _ = find_peaks(np.array(energies))
     return minima_indices
 
@@ -144,7 +147,7 @@ def get_barrier(energies: list[float]) -> float:
     # When we take our single points at each rigid rotation, small geometric effects of asymmetry causes
     # the PES around otherwise equivalent minima to be higher in energy, so we can only trust the closest 
     # barrier to the global min
-    return energies[np.argmin(distances_to_min)] - energies[global_minimum_idx]
+    return energies[barrier_idcs[np.argmin(distances_to_min)]] - energies[global_minimum_idx]
 
 
 def get_barrier_and_num_minima(energies: list[float]) -> tuple[float, int]:
@@ -160,7 +163,7 @@ def fit_coefs_to_freq_cm(coefs: tuple[float, float]) -> float:
 def plot_scan_fit(
         save_dir: Path, disps, unweighted_disps, energies, i_min, i_max, coefs, typical_bohr_disp: float = 0.01, 
         anh: bool = True, nMoving: int | None = None, show_kT: bool = False, T: float = 300.0,
-        show_hr_data: bool = False
+        show_hr_data: bool = False, show_plot: bool = False
         ):
     xs = np.linspace(disps[i_min], disps[i_max], 100)
     ys = quadratic(xs, *coefs) if anh else harmonic(xs, *coefs)
@@ -186,9 +189,10 @@ def plot_scan_fit(
     if show_hr_data:
         barrier = get_barrier(energies)
         minima_idcs = get_minima_idcs(energies)
+        maxima_idcs = get_barrier_idcs(energies)
         twiny.axhline(y=barrier, color="purple", linestyle="--", label=f"Barrier: {barrier:.3f} eV")
-        _ = [twiny.axhline(y=energies[idx], color="brown", label=f"Local min" if i == 0 else None) for i, idx in enumerate(minima_idcs)]
-
+        _ = [twiny.axvline(x=unweighted_disps[idx], color="purple", label=f"Local max" if i == 0 else None) for i, idx in enumerate(maxima_idcs)]
+        _ = [twiny.axvline(x=unweighted_disps[idx], color="brown", label=f"Local min" if i == 0 else None) for i, idx in enumerate(minima_idcs)]
     ax.set_ylabel("Energy (eV)")
     ax.set_xlabel(r"Mass-weighted displacement (Å $\sqrt{amu}$)")
     twiny.set_xlabel("Cartesian displacement (Å)")
@@ -197,6 +201,8 @@ def plot_scan_fit(
     twiny.plot(xs, ys, color="green")
     twiny.legend()
     fig.savefig(save_dir / "scan_fit.png", dpi=300)
+    if not show_plot:
+        plt.close(fig)
 
 
 # TODO: This is analogous to the cumalative displacement from a numeric Hessian only for scans involving two atoms.
