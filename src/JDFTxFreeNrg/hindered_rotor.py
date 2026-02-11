@@ -61,3 +61,4 @@ def get_HR_rot_free_energy(n, W_r, I, symmetry: int, T: float = 300.):
 def _get_delta_E_zpe_x(nu_x, r_x):
     # return const.h * nu_x / (2 + 16*r_x)
     return const.h * nu_x / 2.
+

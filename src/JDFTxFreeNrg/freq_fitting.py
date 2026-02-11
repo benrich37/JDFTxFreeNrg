@@ -108,9 +108,23 @@ def get_rot_data_from_scan_traj(
         plot_scan_fit(Path(save_dir), disps, unweighted_disps, energies, i_min, i_max, coefs, anh=anh, nMoving=nMoving, show_kT=show_kT, T=T, show_hr_data=True, show_plot=show_plot)
     return freq_cm, barrier, num_minima, inertia
 
-def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, rotation_axis: np.ndarray | list[int] | str | None) -> float:
+from JDFTxFreeNrg.projection import resolve_center
+
+# TODO: implement m = 2 and 3 for rotation scans with constrained optimizations
+def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, rotation_axis: np.ndarray | list[int] | str | None, center: int | list[int] | list[float] | np.ndarray | None = None) -> float:
     from JDFTxFreeNrg.projection import resolve_axis, get_inertia_tensor
     from pymatgen.io.ase import AseAtomsAdaptor
+    # Gets the m = 1 moment of inertia for a given rotating group
+    # (see: East, A. L. L.; Radom, L. J. Chem. Phys. 1997, 106, 6655.)
+    # for n = 1:
+    ## rotation_axis should be the bond vector
+    ## center should be the position of either atom in the bond
+    # for n = 2:
+    ## rotation_axis should be the bond vector
+    ## center should be the center of mass of the rotating group
+    # for n = 3:
+    ## rotation_axis should point from COM of the rotating group and the COM of the rest of the system
+    ## center should be the COM of the rotating group
     if rotating_idcs is None:
         return None # Not enough data
     subatoms = AseAtomsAdaptor.get_atoms(structure, msonable=False)[rotating_idcs]
@@ -120,7 +134,8 @@ def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, 
     axis = resolve_axis(structure, rotation_axis)[0] # convert to cart vector
     if len(np.shape(axis)) > 1:
         axis = axis[0, :] # Avoid the dot product retaining shape
-    InertiaTensor = get_inertia_tensor(AseAtomsAdaptor.get_structure(subatoms))
+    center = resolve_center(structure, center)
+    InertiaTensor = get_inertia_tensor(AseAtomsAdaptor.get_structure(subatoms), center=center)
     return np.dot(axis, np.dot(InertiaTensor, axis.T)) # Return expectation value of inertia for axis
 
 def get_minima_idcs(energies: list[float]) -> int:
