@@ -46,7 +46,7 @@ def get_CMcoords(structure: Structure) -> np.ndarray:
         CMcoords[i, :] = site.coords - CM
     return CMcoords / bohr_to_ang
 
-def get_inertia_tensor(struc: Structure):
+def get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> np.ndarray:
     """
     Calculate the average moment of inertia of a molecule.
 
@@ -56,17 +56,23 @@ def get_inertia_tensor(struc: Structure):
     Returns:
         int, list: average moment of inertia, eigenvalues of the inertia tensor
     """
+    if not isinstance(center, np.ndarray):
+        center = resolve_center(struc, center)
     try:
-        inertia_tensor = _get_inertia_tensor(struc)
+        inertia_tensor = _get_inertia_tensor(struc, center=center)
     except Exception as e:
         print("Error in calculating inertia tensor:")
         raise e
     _error_on_nan_in_array(inertia_tensor, context="inertia tensor calculation")
     return inertia_tensor
 
-def _get_inertia_tensor(struc: Structure):
+def _get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> np.ndarray:
     mol = Molecule.from_sites(struc.sites)
-    centered_mol = mol.get_centered_molecule()
+    if center is None:
+        centered_mol = mol.get_centered_molecule()
+    else:
+        centered_mol = mol.copy()
+        centered_mol.translate_sites(range(len(centered_mol.sites)), -center)
     inertia_tensor = np.zeros((3, 3))
     for site in centered_mol:
         c = site.coords
@@ -173,6 +179,23 @@ def gen_ortho_axes_R3(axis: np.ndarray) -> list[np.ndarray]:
     v2 = project_out_vector_from_vector(v2, v1)
     return [v1, v2]
 
+def resolve_center(structure: Structure, center: int | list[int] | np.ndarray | None) -> np.ndarray | None:
+    if isinstance(center, np.ndarray):
+        return center
+    elif isinstance(center, int):
+        return structure.cart_coords[center]
+    elif isinstance(center, list):
+        if not len(center):
+            return None
+        if isinstance(center[0], int):
+            coords = np.array([structure.cart_coords[i] for i in center])
+            return np.mean(coords, axis=0)
+        if isinstance(center[0], float):
+            center_array = np.array(center)
+            if center_array.shape != (3,):
+                raise ValueError(f"Center numpy array must be shape (3,), got shape {center_array.shape}")
+            return center_array
+    return None
 
 
 def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray | dict) -> list[np.ndarray]:
