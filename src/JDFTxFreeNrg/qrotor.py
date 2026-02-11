@@ -15,7 +15,7 @@ def load_man(
     system.grid = np.array(positions)
     system.gridsize = len(positions)
     system.potential_values = np.array(potentials)
-    return 
+    return system
 
 
 def get_system(energies: list[float], angles:list[float], inertia: float, searched_E: int = 400) -> System:
@@ -53,6 +53,14 @@ def _get_helmholtz(system, T: float = 300., gridsize: int | None = None, sym: in
     eigenvalues = system.eigenvalues / 1000.
     return __get_helmholtz(eigenvalues, T, sym=sym)
 
+@noprint
+def get_eigenvalues(system, gridsize: int | None = None):
+    if gridsize is None:
+        gridsize = system.searched_E + 100
+    system.solve(gridsize)
+    eigenvalues = system.eigenvalues / 1000.
+    return eigenvalues
+
 def __get_helmholtz(eigenvalues, T: float = 300., sym: int = 1):
     Z = get_Z_hr(eigenvalues, T) / sym
     return -const.k * T * np.log(Z) / const.eV
@@ -61,7 +69,7 @@ def __get_helmholtz(eigenvalues, T: float = 300., sym: int = 1):
 def get_helmholtz(system = None,energies=None, degrees=None, inertia = None, T: float = 300., gridsize: int | None = None, searched_E: int = 400, sym: int = 1):
     if system is None:
         system = get_system(energies, degrees, inertia, searched_E=searched_E)
-    _get_helmholtz(system, T=T, gridsize=gridsize, sym=sym)
+    return _get_helmholtz(system, T=T, gridsize=gridsize, sym=sym)
 
 # Use finite difference to approximate dlnZ/dT, then get entropy and enthalpy from that. Requires making 4 partition functions instead of just 1.
 def get_entropy_and_enthalpy(system = None,energies=None, degrees=None, inertia = None, T: float = 300., gridsize: int | None = None, searched_E: int = 400, sym: int = 1):
