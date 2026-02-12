@@ -217,6 +217,7 @@ def _resolve_axis_data(axis: str | list[int] | np.ndarray | dict) -> tuple[np.nd
     return axis_data, gen_ortho_set
 
 def _axis_data_to_vector(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
+    # _axis = None
     if isinstance(axis, np.ndarray):
         if not np.shape(axis) in [(3,), (3,1)]:
             raise ValueError(
@@ -224,11 +225,11 @@ def _axis_data_to_vector(structure: Structure, axis: str | list[int] | np.ndarra
                 "(if you were trying to provide multiple axes, use a list of arrays instead."
                 "If you were trying to provide indices, use a list of two integers instead.)"
                 )
-        return axis
+        # return axis/np.linalg.norm(axis)
     elif isinstance(axis, str):
         if not axis in ref_axs:
             raise ValueError(f"Unknown named axis: {axis}. Valid options are: {list(ref_axs.keys())}")
-        return ref_axs[axis]
+        axis = ref_axs[axis]
     elif isinstance(axis, list):
         if not all([isinstance(i, int) for i in axis]):
             raise TypeError(f"Axis list must contain integers, got: {axis}")
@@ -236,9 +237,10 @@ def _axis_data_to_vector(structure: Structure, axis: str | list[int] | np.ndarra
             raise ValueError(f"Axis list must contain exactly two indices, got: {axis}")
         p0 = structure.cart_coords[axis[0]]
         p1 = structure.cart_coords[axis[1]]
-        return p1 - p0
+        axis = p1 - p0
     else:
         raise TypeError(f"Unexpected axis data type: {type(axis)}")
+    return axis / np.linalg.norm(axis)
     
 def resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
     try:

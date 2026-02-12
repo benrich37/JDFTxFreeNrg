@@ -31,9 +31,9 @@ def get_system(energies: list[float], angles:list[float], inertia: float, search
 k_B = const.physical_constants['Boltzmann constant in eV/K'][0]
 
 
-def get_Z_hr(eigenvalues, T: float = 300.):
+def get_Z_hr(eigenvalues, T: float = 300., sym: int = 1):
     beta = 1 / (k_B * T)
-    Z = np.sum(np.exp(-eigenvalues * beta))
+    Z = np.sum(np.exp(-eigenvalues * beta)) / sym
     return Z
         
 
@@ -62,7 +62,7 @@ def get_eigenvalues(system, gridsize: int | None = None):
     return eigenvalues
 
 def __get_helmholtz(eigenvalues, T: float = 300., sym: int = 1):
-    Z = get_Z_hr(eigenvalues, T) / sym
+    Z = get_Z_hr(eigenvalues, T, sym=sym)
     return -const.k * T * np.log(Z) / const.eV
 
 
@@ -84,27 +84,27 @@ def get_entropy_and_enthalpy(system = None,energies=None, degrees=None, inertia 
 
 ## These should probably be in a separate module
 
-def get_fd_dlnZdT(eigenvalues: np.ndarray, T: float, step=0.1):
+def get_fd_dlnZdT(eigenvalues: np.ndarray, T: float, step=0.1, sym: int = 1):
     Ts = np.array([T - step, T + step])
-    Zs = np.array([get_Z_hr(eigenvalues, _T) for _T in Ts])
+    Zs = np.array([get_Z_hr(eigenvalues, _T, sym=sym) for _T in Ts])
     log_Zs = np.log(Zs)
     dlnZdT = (log_Zs[1] - log_Zs[0]) / (2 * step)
     return dlnZdT
 
-def get_fd_entropy(eigenvalues: np.ndarray, T: float, step=0.1):
-    dlnZdT = get_fd_dlnZdT(eigenvalues, T, step=step)
-    lnZ = np.log(get_Z_hr(eigenvalues, T))
+def get_fd_entropy(eigenvalues: np.ndarray, T: float, step=0.1, sym: int = 1):
+    dlnZdT = get_fd_dlnZdT(eigenvalues, T, step=step, sym=sym)
+    lnZ = np.log(get_Z_hr(eigenvalues, T, sym=sym))
     S = const.k * (lnZ + T * dlnZdT)
     return S / const.eV
 
-def get_fd_enthalpy(eigenvalues: np.ndarray, T: float, step=0.1):
-    dlnZdT = get_fd_dlnZdT(eigenvalues, T, step=step)
+def get_fd_enthalpy(eigenvalues: np.ndarray, T: float, step=0.1, sym: int = 1):
+    dlnZdT = get_fd_dlnZdT(eigenvalues, T, step=step, sym=sym)
     E = const.k * T**2 * dlnZdT
     return E / const.eV
 
-def get_fd_Cv(eigenvalues: np.ndarray, T: float, step=0.1):
+def get_fd_Cv(eigenvalues: np.ndarray, T: float, step=0.1, sym: int = 1):
     Ts = np.array([T - step, T + step])
-    Es = np.array([get_fd_enthalpy(eigenvalues, _T, step=step) for _T in Ts])
+    Es = np.array([get_fd_enthalpy(eigenvalues, _T, step=step, sym=sym) for _T in Ts])
     Cv = (Es[1] - Es[0]) / (2 * step)
     return Cv
 

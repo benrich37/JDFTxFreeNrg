@@ -109,6 +109,7 @@ def get_rot_data_from_scan_traj(
     return freq_cm, barrier, num_minima, inertia
 
 from JDFTxFreeNrg.projection import resolve_center
+from ase import Atoms
 
 # TODO: implement m = 2 and 3 for rotation scans with constrained optimizations
 def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, rotation_axis: np.ndarray | list[int] | str | None, center: int | list[int] | list[float] | np.ndarray | None = None) -> float:
@@ -127,15 +128,15 @@ def get_rotation_inertia(structure: Structure, rotating_idcs: list[int] | None, 
     ## center should be the COM of the rotating group
     if rotating_idcs is None:
         return None # Not enough data
-    subatoms = AseAtomsAdaptor.get_atoms(structure, msonable=False)[rotating_idcs]
+    subatoms: Atoms = AseAtomsAdaptor.get_atoms(structure, msonable=False)[rotating_idcs]
+    center = resolve_center(structure, center)
+    InertiaTensor = get_inertia_tensor(AseAtomsAdaptor.get_structure(subatoms), center=center)
     if rotation_axis is None:
-        # return AseAtomsAdaptor.get_structure(subatoms).get_moments_of_inertia()[2]
-        return subatoms.get_moments_of_inertia()[2] # Assume greatest moment of inertia is the rotation axis
+        evals, _ = np.linalg.eigh(InertiaTensor)
+        return evals[2] # Assume greatest moment of inertia is the rotation axis
     axis = resolve_axis(structure, rotation_axis)[0] # convert to cart vector
     if len(np.shape(axis)) > 1:
         axis = axis[0, :] # Avoid the dot product retaining shape
-    center = resolve_center(structure, center)
-    InertiaTensor = get_inertia_tensor(AseAtomsAdaptor.get_structure(subatoms), center=center)
     return np.dot(axis, np.dot(InertiaTensor, axis.T)) # Return expectation value of inertia for axis
 
 def get_minima_idcs(energies: list[float]) -> int:
