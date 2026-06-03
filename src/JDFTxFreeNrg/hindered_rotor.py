@@ -34,7 +34,8 @@ def get_HR_rot_entropy(n, W_r, I, symmetry, T: float = 300.):
     r_r = get_r_r(n, W_r, I)
     S_rot = get_entropy_vib(nu_r / (const.c * 100), T)
     S_rot += _get_delta_S_x(r_r, T_r) / const.eV
-    S_rot -= const.k * np.log(symmetry) / const.eV
+    # sym is assumed to be equal to n in the derivations, this is double counting
+    # S_rot -= const.k * np.log(symmetry) / const.eV
     return S_rot
 
 def _get_delta_S_x(r_x, T_x):
@@ -61,3 +62,4 @@ def get_HR_rot_free_energy(n, W_r, I, symmetry: int, T: float = 300.):
 def _get_delta_E_zpe_x(nu_x, r_x):
     # return const.h * nu_x / (2 + 16*r_x)
     return const.h * nu_x / 2.
+
