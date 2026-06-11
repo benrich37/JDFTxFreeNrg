@@ -2,6 +2,7 @@
 from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector, safe_orthogonalize_projector
 from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array, _error_on_nan_in_list_of_vectors
 import numpy as np
+from numpy.typing import NDArray
 from pymatgen.core.structure import Structure, Molecule
 from pymatgen.core.units import bohr_to_ang
 
@@ -12,7 +13,7 @@ ref_axs = {
 }
 
 class Mode:
-    def __init__(self, n: np.ndarray, iAtom: int):
+    def __init__(self, n: NDArray[np.float64], iAtom: int):
         self.n = n
         self.iAtom = iAtom
 
@@ -34,10 +35,12 @@ def get_modes(structure: Structure) -> list[Mode]:
         print("Error in constructing modes:")
         raise e
 
-def get_CMcoords(structure: Structure) -> np.ndarray:
-    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites])
+def get_CMcoords(structure: Structure) -> NDArray[np.float64]:
+    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites], dtype=np.float64)
     total_mass = np.sum(mass_vector)
-    CMcoords = np.zeros((len(structure.sites), 3))
+    if total_mass == 0:
+        raise ValueError("Total mass of structure is zero, cannot calculate center of mass coordinates.")
+    CMcoords = np.zeros((len(structure.sites), 3), dtype=np.float64)
     CM = np.zeros(3)
     for i, site in enumerate(structure.sites):
         CM += site.coords * mass_vector[i]
@@ -46,7 +49,7 @@ def get_CMcoords(structure: Structure) -> np.ndarray:
         CMcoords[i, :] = site.coords - CM
     return CMcoords / bohr_to_ang
 
-def get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> np.ndarray:
+def get_inertia_tensor(struc: Structure, center: NDArray[np.float64] | None = None) -> NDArray[np.float64]:
     """
     Calculate the average moment of inertia of a molecule.
 
@@ -66,7 +69,7 @@ def get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> np
     _error_on_nan_in_array(inertia_tensor, context="inertia tensor calculation")
     return inertia_tensor
 
-def _get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> np.ndarray:
+def _get_inertia_tensor(struc: Structure, center: NDArray[np.float64] | None = None) -> NDArray[np.float64]:
     mol = Molecule.from_sites(struc.sites)
     if center is None:
         centered_mol = mol.get_centered_molecule()
@@ -87,16 +90,16 @@ def _get_inertia_tensor(struc: Structure, center: np.ndarray | None = None) -> n
 
 
 
-def get_centered_coords(structure: Structure, center: np.ndarray) -> np.ndarray:
-    centered_coords = np.zeros((len(structure.sites), 3))
+def get_centered_coords(structure: Structure, center: NDArray[np.float64]) -> NDArray[np.float64]:
+    centered_coords = np.zeros((len(structure.sites), 3), dtype=np.float64)
     for i, site in enumerate(structure.sites):
         centered_coords[i, :] = site.coords - center
     return centered_coords / bohr_to_ang
 
-def get_CMcoords(structure: Structure) -> np.ndarray:
+def get_CMcoords(structure: Structure) -> NDArray[np.float64]:
     return get_centered_coords(structure, get_center_of_mass(structure))
 
-def get_center_of_mass(structure: Structure) -> np.ndarray:
+def get_center_of_mass(structure: Structure) -> NDArray[np.float64]:
     mass_vector = np.array([site.specie.atomic_mass for site in structure.sites])
     total_mass = np.sum(mass_vector)
     CM = np.zeros(3)
@@ -105,14 +108,14 @@ def get_center_of_mass(structure: Structure) -> np.ndarray:
     CM /= total_mass
     return CM
 
-def get_rotation_vector(axis: np.ndarray, structure: Structure, mol_indices: list[int] | None = None) -> np.ndarray:
+def get_rotation_vector(axis: NDArray[np.float64], structure: Structure, mol_indices: list[int] | None = None) -> NDArray[np.float64]:
     if mol_indices is None:
         mol_indices = list(range(len(structure.sites)))
     modes = get_modes(structure)
     CMcoords = get_CMcoords(structure)
     return _get_rotation_vector(axis, modes, CMcoords, mol_indices)
 
-def _get_rotation_vector(axis: np.ndarray, modes: list[Mode], CMcoords: np.ndarray, mol_indices: list[int]) -> np.ndarray:
+def _get_rotation_vector(axis: NDArray[np.float64], modes: list[Mode], CMcoords: NDArray[np.float64], mol_indices: list[int]) -> NDArray[np.float64]:
     vec = np.zeros(len(modes))
     for i, mode in enumerate(modes):
         if mode.iAtom in mol_indices:
@@ -123,8 +126,8 @@ def _get_rotation_vector(axis: np.ndarray, modes: list[Mode], CMcoords: np.ndarr
 # TODO: Partition out individual operations being performed within this function into helper functions for testing and clarity
 def get_rotations_molecule(
         modes: list[Mode], molecule_structure: Structure, mol_indices: list[int], symmThreshold: float = 1e-5,
-        center: np.ndarray | None = None, axes: list[np.ndarray] | None = None, ortho: bool = True, safe_ortho: bool = True
-        ):
+        center: NDArray[np.float64] | None = None, axes: list[NDArray[np.float64]] | None = None, ortho: bool = True, safe_ortho: bool = True
+        ) -> list[NDArray[np.float64]]:
     if center is None:
         center = get_center_of_mass(molecule_structure)
     CMcoords = get_centered_coords(molecule_structure, center)
@@ -148,27 +151,27 @@ def get_rotations_molecule(
         projectors = [v for v in projectors.T]
     return projectors
 
-def get_translations_molecule(modes: list[Mode], mol_indices: list[int], axes: list[np.ndarray] | None = None) -> np.ndarray:
-    projectors = []
+def get_translations_molecule(modes: list[Mode], mol_indices: list[int], axes: list[NDArray[np.float64]] | None = None) -> list[NDArray[np.float64]]:
+    projectors: list[NDArray[np.float64]] = []
     if axes is None:
-        axes = list(np.eye(3))
+        axes = list(np.eye(3, dtype=np.float64))
     else:
         axes = progressively_orthogonalize_vectors(axes)
     for k, axis in enumerate(axes):
-        vec = np.zeros(len(modes))
+        vec = np.zeros(len(modes), dtype=np.float64)
         for i, mode in enumerate(modes):
             if mode.iAtom in mol_indices:
                 vec[i] = dot(mode.n, axis)
-        projectors.append(vec)
+        projectors.append(np.array(vec, dtype=np.float64))
     return projectors
 
-def project_out_vector_from_vector(vector_save: np.ndarray, vector_proj: np.ndarray) -> np.ndarray:
+def project_out_vector_from_vector(vector_save : NDArray[np.float64], vector_proj : NDArray[np.float64]) -> NDArray[np.float64]:
     overlap = dot(vector_save, vector_proj) / dot(vector_proj, vector_proj)
     projected_vector = vector_save - overlap * vector_proj
     return projected_vector / np.linalg.norm(projected_vector)
 
 # TODO: Test this function
-def gen_ortho_axes_R3(axis: np.ndarray) -> list[np.ndarray]:
+def gen_ortho_axes_R3(axis: NDArray[np.float64]) -> list[NDArray[np.float64]]:
     R3 = np.eye(3)
     axis = axis / np.linalg.norm(axis)
     overlaps = [abs(np.dot(axis, R3[:, i])) for i in range(3)]
@@ -179,8 +182,8 @@ def gen_ortho_axes_R3(axis: np.ndarray) -> list[np.ndarray]:
     v2 = project_out_vector_from_vector(v2, v1)
     return [v1, v2]
 
-def resolve_center(structure: Structure, center: int | list[int] | np.ndarray | None) -> np.ndarray | None:
-    if isinstance(center, np.ndarray):
+def resolve_center(structure: Structure, center: int | list[int] | NDArray[np.float64] | None) -> NDArray[np.float64] | None:
+    if isinstance(center, NDArray):
         return center
     elif isinstance(center, int):
         return structure.cart_coords[center]
@@ -198,7 +201,7 @@ def resolve_center(structure: Structure, center: int | list[int] | np.ndarray | 
     return None
 
 
-def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray | dict) -> list[np.ndarray]:
+def resolve_axis(structure: Structure, axis: str | list[int] | NDArray[np.float64] | dict) -> list[NDArray[np.float64]]:
     axis_data, gen_ortho_set = _resolve_axis_data(axis)
     axis_vec = _axis_data_to_vector(structure, axis_data)
     if gen_ortho_set:
@@ -206,7 +209,7 @@ def resolve_axis(structure: Structure, axis: str | list[int] | np.ndarray | dict
     else:
         return [axis_vec]
     
-def _resolve_axis_data(axis: str | list[int] | np.ndarray | dict) -> tuple[np.ndarray, bool]:
+def _resolve_axis_data(axis: str | list[int] | NDArray[np.float64] | dict) -> tuple[NDArray[np.float64], bool]:
     axis_data = axis
     gen_ortho_set = False
     if isinstance(axis, dict):
@@ -216,7 +219,7 @@ def _resolve_axis_data(axis: str | list[int] | np.ndarray | dict) -> tuple[np.nd
         axis_data = axis["axis"]
     return axis_data, gen_ortho_set
 
-def _axis_data_to_vector(structure: Structure, axis: str | list[int] | np.ndarray) -> np.ndarray:
+def _axis_data_to_vector(structure: Structure, axis: str | list[int] | NDArray[np.float64]) -> NDArray[np.float64]:
     # _axis = None
     if isinstance(axis, np.ndarray):
         if not np.shape(axis) in [(3,), (3,1)]:
@@ -252,6 +255,8 @@ def resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
 def _resolve_idcss(structure: Structure, molecule_sets: list[dict]) -> None:
     for mset in molecule_sets:
         idcs = mset.get("indices", None)
+        if idcs is None:
+            idcs = mset.get("idcs", None)
         if idcs is None:
             resolved_idcs = list(range(len(structure.sites)))
         else:
@@ -315,13 +320,13 @@ def _get_clean_mol_set(mol_set: dict) -> dict:
     clean_set['ortho'] = mol_set.get("ortho", True)
     return clean_set
 
-def _append_projectors_mol_set(projectors: list[np.ndarray], modes: list[Mode], structure: Structure, mol_set: dict):
+def _append_projectors_mol_set(projectors: list[NDArray[np.float64]], modes: list[Mode], structure: Structure, mol_set: dict) -> list[NDArray[np.float64]]:
     clean_set = get_clean_mol_set(mol_set)
     projectors = _append_projectors_mol_set_trans(projectors, modes, clean_set)
     projectors = _append_projectors_mol_set_rot(projectors, modes, clean_set, structure)
     return projectors
 
-def _append_projectors_mol_set_trans(projectors: list[np.ndarray], modes: list[Mode], clean_set: dict):
+def _append_projectors_mol_set_trans(projectors: list[NDArray[np.float64]], modes: list[Mode], clean_set: dict) -> list[NDArray[np.float64]]:
     if clean_set["trans"]:
         try:
             projectors += get_translations_molecule(modes, clean_set["indices"], axes=clean_set["axes"])
@@ -330,7 +335,7 @@ def _append_projectors_mol_set_trans(projectors: list[np.ndarray], modes: list[M
             raise e
     return projectors
 
-def _append_projectors_mol_set_rot(projectors: list[np.ndarray], modes: list[Mode], clean_set: dict, structure: Structure):
+def _append_projectors_mol_set_rot(projectors: list[NDArray[np.float64]], modes: list[Mode], clean_set: dict, structure: Structure) -> list[NDArray[np.float64]]:
     if clean_set["rot"]:
         try:
             mol_structure = structure.copy()
@@ -341,18 +346,18 @@ def _append_projectors_mol_set_rot(projectors: list[np.ndarray], modes: list[Mod
             raise e
     return projectors
 
-def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
+def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> NDArray[np.float64]:
     try:
         return _get_projector_raw(structure, molecule_sets=molecule_sets)
     except Exception as e:
         print("Error in constructing raw projector:")
         raise e
 
-def _get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
+def _get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> NDArray[np.float64]:
     if molecule_sets is None:
         molecule_sets = []
     modes = get_modes(structure)
-    projectors = []
+    projectors: list[NDArray[np.float64]] = []
     resolve_idcss(structure, molecule_sets)
     resolve_axes(structure, molecule_sets)
     for i, mol_set in enumerate(molecule_sets):
@@ -362,7 +367,7 @@ def _get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = 
     return norm_projector
 
 
-def get_projector(structure: Structure, molecule_sets: list[dict] | None = None) -> np.ndarray:
+def get_projector(structure: Structure, molecule_sets: list[dict] | None = None) -> NDArray[np.float64]:
     projector_raw = get_projector_raw(structure, molecule_sets=molecule_sets)
     vectors = [v for v in projector_raw.T]
     vectors = remove_parallel_vectors_loop(vectors, cutoff=1e-4)
@@ -370,20 +375,20 @@ def get_projector(structure: Structure, molecule_sets: list[dict] | None = None)
     return projector
 
 
-def project_on_subspace(mat: np.ndarray, subspace: np.ndarray) -> np.ndarray:
+def project_on_subspace(mat: NDArray[np.float64], subspace: NDArray[np.float64]) -> NDArray[np.float64]:
     ppDag = subspace @ dagger(subspace)
     # mat_proj = ppDag @ mat @ ppDag
     mat_proj = ppDag @ mat @ ppDag.T
     return mat_proj
 
-def project_out_subspace(mat: np.ndarray, subspace: np.ndarray) -> np.ndarray:
+def project_out_subspace(mat: NDArray[np.float64], subspace: NDArray[np.float64]) -> NDArray[np.float64]:
     ppDag = subspace @ dagger(subspace)
     IminPpdag = np.eye(mat.shape[0]) - ppDag
     # mat_proj = IminPpdag @ mat @ IminPpdag
     mat_proj = IminPpdag @ mat @ IminPpdag.T
     return mat_proj
 
-def get_subspace_overlap(projector1: np.ndarray, projector2: np.ndarray):
+def get_subspace_overlap(projector1: NDArray[np.float64], projector2: NDArray[np.float64]) -> float:
     # For different projector shapes, put the smaller subspace in projector1
     svals = np.linalg.svd(dagger(projector1) @ projector2, compute_uv=False)
     frac = np.sum(svals**2)/(np.sqrt(len(projector1.T)))

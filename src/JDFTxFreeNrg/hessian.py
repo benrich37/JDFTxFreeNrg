@@ -9,6 +9,7 @@ from JDFTxFreeNrg.glogwrite import write_Gaussian_vib_log
 from warnings import warn
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase import Atoms
+from numpy.typing import NDArray
 
 
 def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
@@ -25,17 +26,19 @@ def print_freqs(freqs: list[np.complex128], zero_thresh: float | None = 1e-3):
                 print(f"Mode {i}: {f.real:.2f} + {f.imag:.2f} i cm^-1") # I don't see how this could ever happen
 
 
-def get_invsqrtM(structure: Structure) -> np.ndarray:
+def get_invsqrtM(structure: Structure) -> NDArray[np.float64]:
     # TODO: Replace the 1822.888 magic number with a proper constant import
-    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites]) * 1822.888  # convert to amu
-    invsqrtM = np.zeros((len(mass_vector)*3, len(mass_vector)*3))
+    mass_vector = np.array([site.specie.atomic_mass for site in structure.sites], dtype=np.float64) * 1822.888  # convert to amu
+    invsqrtM = np.zeros((len(mass_vector)*3, len(mass_vector)*3), dtype=np.float64)
     for iAtom in range(len(mass_vector)):
         for iCart in range(3):
             idx = iAtom*3 + iCart
+            if mass_vector[iAtom] == 0:
+                raise ValueError(f"Atom {iAtom} has zero mass, cannot compute inverse square root of mass matrix")
             invsqrtM[idx, idx] = 1.0 / np.sqrt(mass_vector[iAtom])
     return invsqrtM
 
-def get_freqs(omegaSqEigs: np.ndarray) -> np.ndarray:
+def get_freqs(omegaSqEigs: NDArray[np.float64]) -> NDArray[np.complex128]:
     """ Convert eigenvalues of mass-weighted Hessian to frequencies in Hartree.
     
     Args:
@@ -49,7 +52,7 @@ def get_freqs(omegaSqEigs: np.ndarray) -> np.ndarray:
 
 nrg_to_cm_conv = Rydberg / 50.
 
-def freq_nrg_to_cm(freqs: np.ndarray) -> np.ndarray:
+def freq_nrg_to_cm(freqs: NDArray[np.float64 | np.complex128]) -> NDArray[np.complex128]:
     """ Convert frequencies from Hartree to cm^-1
     
     Args:
@@ -58,10 +61,10 @@ def freq_nrg_to_cm(freqs: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Frequencies in cm^-1
     """
-    return freqs * nrg_to_cm_conv  # Hartree to cm^-1
+    return freqs * np.complex128(nrg_to_cm_conv, 0.0)  # Hartree to cm^-1
 
 
-def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dict] | None = None, reverse: bool = False) -> np.ndarray:
+def get_projected_K(structure: Structure, K: NDArray[np.float64], molecule_sets: list[dict] | None = None, reverse: bool = False) -> NDArray[np.float64]:
     """ Returns the Hessian projected onto or out of the subspace defined by the molecule sets.
     
     Args:
@@ -81,7 +84,7 @@ def get_projected_K(structure: Structure, K: np.ndarray, molecule_sets: list[dic
         K_proj = project_out_subspace(K, projector)
     return K_proj
 
-def get_omegaSq(structure: Structure, K: np.ndarray) -> np.ndarray:
+def get_omegaSq(structure: Structure, K: NDArray[np.float64]) -> NDArray[np.float64]:
     """ Get mass-weighted Hessian.
 
     Args:
@@ -92,20 +95,20 @@ def get_omegaSq(structure: Structure, K: np.ndarray) -> np.ndarray:
         np.ndarray: Mass-weighted Hessian matrix
     """
     invsqrtM = get_invsqrtM(structure)
-    omegaSq = np.dot(invsqrtM, np.dot(K, invsqrtM))
+    omegaSq = np.array(np.dot(invsqrtM, np.dot(K, invsqrtM)), dtype=np.float64)
     return omegaSq
 
-def solve_vib_modes(structure: Structure, K: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """ Get vibrational modes and eigenvalues from Hessian and its structure.
+# def solve_vib_modes(structure: Structure, K: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+#     """ Get vibrational modes and eigenvalues from Hessian and its structure.
     
-    Args:
-        structure (Structure): pymatgen Structure
-        K (np.ndarray): Hessian matrix
+#     Args:
+#         structure (Structure): pymatgen Structure
+#         K (np.ndarray): Hessian matrix
         
-    Returns:
-        tuple[np.ndarray, np.ndarray]: eigenvalues and eigenvectors of Hessian converted to mass-weighted coordinates"""
-    omegaSqEigs, omegaSqEvecs = np.linalg.eigh(get_omegaSq(structure, K))
-    return omegaSqEigs, omegaSqEvecs
+#     Returns:
+#         tuple[np.ndarray, np.ndarray]: eigenvalues and eigenvectors of Hessian converted to mass-weighted coordinates"""
+#     omegaSqEigs, omegaSqEvecs = np.linalg.eigh(get_omegaSq(structure, K))
+#     return omegaSqEigs, omegaSqEvecs
 
 
 def get_free_idcs(structure: Structure) -> list[int]:
@@ -141,11 +144,12 @@ def read_K(calc_dir: Path | str, structure: Structure, expand_to_full: bool = Fa
         calc_prefix += "."
     nAtoms = len(get_free_idcs(structure))
     K = np.fromfile(Path(calc_dir) / f"{calc_prefix}K", dtype=np.complex128).reshape((nAtoms*3, nAtoms*3)).real
+    K_return = np.array(K, dtype=np.float64)
     if expand_to_full:
-        K = expand_K(K, structure)
-    return K
+        K_return = expand_K(K_return, structure)
+    return K_return
 
-def expand_K(K_small: np.ndarray, structure: Structure) -> np.ndarray:
+def expand_K(K_small: NDArray[np.float64], structure: Structure) -> NDArray[np.float64]:
     """ Expand a reduced Hessian to the full Hessian including fixed atoms.
     
     Expand a reduced Hessian matrix to the full Hessian matrix by inserting zero rows and columns for the fixed 
@@ -160,7 +164,7 @@ def expand_K(K_small: np.ndarray, structure: Structure) -> np.ndarray:
     """
     nAtoms = len(structure)
     full_size = nAtoms * 3
-    K_full = np.zeros((full_size, full_size))
+    K_full = np.zeros((full_size, full_size), dtype=np.float64)
     free_idcs = get_free_idcs(structure)
     if len(free_idcs) == nAtoms:
         return K_small
@@ -169,7 +173,7 @@ def expand_K(K_small: np.ndarray, structure: Structure) -> np.ndarray:
             K_full[i_full*3:(i_full+1)*3, j_full*3:(j_full+1)*3] = K_small[i_small*3:(i_small+1)*3, j_small*3:(j_small+1)*3]
     return K_full
 
-def reduce_K(K_full: np.ndarray, structure: Structure) -> np.ndarray:
+def reduce_K(K_full: NDArray[np.float64], structure: Structure) -> NDArray[np.float64]:
     """ Reduce a full Hessian to only the free atoms.
 
     Reduce a full Hessian matrix to only the free atoms as specified by the selective dynamics flags in the structure.
@@ -183,13 +187,13 @@ def reduce_K(K_full: np.ndarray, structure: Structure) -> np.ndarray:
     """
     free_idcs = get_free_idcs(structure)
     nFree = len(free_idcs)
-    K_small = np.zeros((nFree*3, nFree*3))
+    K_small = np.zeros((nFree*3, nFree*3), dtype=np.float64)
     for i_small, i_full in enumerate(free_idcs):
         for j_small, j_full in enumerate(free_idcs):
             K_small[i_small*3:(i_small+1)*3, j_small*3:(j_small+1)*3] = K_full[i_full*3:(i_full+1)*3, j_full*3:(j_full+1)*3]
     return K_small
 
-def expand_posn_vec(structure: Structure, vec_red: np.ndarray) -> np.ndarray:
+def expand_posn_vec(structure: Structure, vec_red: NDArray[np.float64]) -> NDArray[np.float64]:
     """ Expand a reduced position vector to the full structure including fixed atoms.
     
     Args:
@@ -200,13 +204,13 @@ def expand_posn_vec(structure: Structure, vec_red: np.ndarray) -> np.ndarray:
         np.ndarray: Full position vector of shape (nAtoms, 3)
     """
     nAtoms = len(structure)
-    vec_full = np.zeros((nAtoms, 3))
+    vec_full = np.zeros((nAtoms, 3), dtype=np.float64)
     free_idcs = get_free_idcs(structure)
     for i, idx in enumerate(free_idcs):
         vec_full[idx] = vec_red[i]
     return vec_full
 
-def reduce_posn_vec(structure: Structure, vec_full: np.ndarray) -> np.ndarray:
+def reduce_posn_vec(structure: Structure, vec_full: NDArray[np.float64]) -> NDArray[np.float64]:
     """ Reduce a full position vector to only the free atoms.
     
     Args:
@@ -217,7 +221,7 @@ def reduce_posn_vec(structure: Structure, vec_full: np.ndarray) -> np.ndarray:
         np.ndarray: Reduced position vector of shape (nFreeAtoms, 3)
     """
     free_idcs = get_free_idcs(structure)
-    vec_red = np.array([vec_full[idx] for idx in free_idcs])
+    vec_red = np.array([vec_full[idx] for idx in free_idcs], dtype=np.float64)
     return vec_red
 
 def get_reduced_structure(structure: Structure) -> Structure:
@@ -233,7 +237,7 @@ def get_reduced_structure(structure: Structure) -> Structure:
     reduced_structure = Structure.from_sites([site for i, site in enumerate(structure.sites) if i in free_idcs])
     return reduced_structure
 
-def solve_vib_modes(structure: Structure, K_proj: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def solve_vib_modes(structure: Structure, K_proj: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """ Solve for vibrational modes with a cleaned Hessian.
 
     Args:
@@ -247,7 +251,7 @@ def solve_vib_modes(structure: Structure, K_proj: np.ndarray) -> tuple[np.ndarra
     omegaSqEigs, omegaSqEvecs = np.linalg.eigh(omegaSq)
     return omegaSqEigs, omegaSqEvecs
 
-def solve_vib_modes_debug(structure: Structure, K_proj: np.ndarray):
+def solve_vib_modes_debug(structure: Structure, K_proj: NDArray[np.float64]) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     """ Solve for vibrational modes with a cleaned Hessian.
 
     Behaves like solve_vib_modes, but also returns the eigenvectors of the Hessian in normal coordinates as the third return value.
@@ -266,7 +270,7 @@ def solve_vib_modes_debug(structure: Structure, K_proj: np.ndarray):
     return omegaSqEigs, omegaSqEvecs, evecs
 
 
-def get_structure_for_gaussian_vib_log(structure: Structure, freqs_cm: np.ndarray, evecs: np.ndarray, zero_thresh: float = 1e-3) -> Structure:
+def get_structure_for_gaussian_vib_log(structure: Structure, freqs_cm: NDArray[np.float64], evecs: NDArray[np.float64], zero_thresh: float = 1e-3) -> Structure:
     free_idcs = get_free_idcs(structure)
     vib_modes = []
     for i in range(len(freqs_cm)):
@@ -284,7 +288,7 @@ def get_structure_for_gaussian_vib_log(structure: Structure, freqs_cm: np.ndarra
     return structure
 
 
-def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False) -> tuple[np.ndarray, np.ndarray]:
+def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     infile = JDFTXInfile.from_file(calc_dir / "in")
     structure = infile.structure
     K = get_projected_K(structure, read_K(calc_dir, structure, expand_to_full=True), molecule_sets=molecule_sets, reverse=reverse)
@@ -296,28 +300,30 @@ def get_omegaSqEigs_evecs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict
 
 
 def get_omegaSqEigs_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, use_in: bool = True, trim_zero: bool = True, zero_thresh: float = 2e-17,
-                                  ) -> tuple[np.ndarray, np.ndarray]:
+                                  ) -> NDArray[np.float64]:
     # 2e-17 approximately corresponds to 1e-3 cm^-1
     if use_in:
         structure = JDFTXInfile.from_file(calc_dir / "in").structure
     else:
         structure = JDFTXOutfile.from_file(calc_dir / "out").structure
+    _K = read_K(calc_dir, structure, expand_to_full=True)
     K = get_projected_K(
         structure, 
-        read_K(calc_dir, structure, expand_to_full=True), 
+        _K, 
         molecule_sets=molecule_sets, reverse=reverse
         )
     K = reduce_K(K, structure)
     substructure = get_reduced_structure(structure)
     _omegaSqEigs, _ = solve_vib_modes(substructure, K)
-    omegaSqEigs = [o for o in _omegaSqEigs if (not trim_zero) or (abs(o) > zero_thresh)]
+    omegaSqEigs = np.array([o for o in _omegaSqEigs if (not trim_zero) or (abs(o) > zero_thresh)], dtype=np.float64)
     return omegaSqEigs
 
 def get_freqs_cm_from_calc_dir(calc_dir: Path, molecule_sets: list[dict] | None = None, reverse: bool = False, use_in: bool = True, trim_zero: bool = True, zero_thresh: float = 1e-1,
-                               ) -> np.ndarray:
+                               ) -> NDArray[np.complex128]:
     _zero_thresh = (zero_thresh / nrg_to_cm_conv)**2
     omegaSqEigs = get_omegaSqEigs_from_calc_dir(calc_dir, molecule_sets=molecule_sets, reverse=reverse, use_in=use_in, trim_zero=trim_zero, zero_thresh=_zero_thresh)
-    freqs = np.array(freq_nrg_to_cm(get_freqs(np.array(omegaSqEigs))))
+    # freqs = np.array(freq_nrg_to_cm(get_freqs(np.array(omegaSqEigs))))
+    freqs = freq_nrg_to_cm(get_freqs(omegaSqEigs))
     return freqs
 
 
