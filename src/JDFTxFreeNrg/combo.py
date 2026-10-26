@@ -1,9 +1,11 @@
 
+import copy
 from pathlib import Path
 import numpy as np
 from pymatgen.core.structure import Structure
 from pymatgen.io.jdftx.outputs import JDFTXOutfile
 from JDFTxFreeNrg.hessian import get_freqs_cm_from_calc_dir, print_freqs
+from JDFTxFreeNrg.projection import resolve_idcss
 from JDFTxFreeNrg.solv_entropy import get_vfree, get_solv_entropy_rot, get_solv_entropy_trans
 from JDFTxFreeNrg.volume import StructureVolume
 from JDFTxFreeNrg.standard import get_enthalpy_rot, get_enthalpy_trans, get_entropy_rot, get_ideal_gas_vol, get_entropy_trans, k_ev
@@ -48,6 +50,7 @@ def get_free_energy_vib(vib_calc_dir: Path, T: float, qrrho: bool = True, freq0:
         molecule_sets = []
     if structure is None:
         structure = StructureVolume.from_calc_dir(vib_calc_dir)
+    molecule_sets = copy.deepcopy(molecule_sets)
     resolve_axes(structure, molecule_sets)
     freqs = get_freqs_cm_from_calc_dir(vib_calc_dir, molecule_sets=None if no_proj else molecule_sets, proj_rot=False, proj_trans=False, trim_zero = (bad_proj_method_len == 0))[bad_proj_method_len:]
     if remove_imag:
@@ -72,6 +75,8 @@ def get_free_energy_tr(solute_calc_dir: Path, T: float, solvent_calc_dir: Path |
         molecule_sets = []
     structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
     clean_structure(structure)
+    molecule_sets = copy.deepcopy(molecule_sets)
+    resolve_idcss(structure, molecule_sets)
     E_t = 0.0
     S_t = 0.0
     vs = None
@@ -107,6 +112,8 @@ def get_free_energy_rot(solute_calc_dir: Path, T: float, solvent_calc_dir: Path 
         molecule_sets = []
     structure = StructureVolume.from_calc_dir(solute_calc_dir, method=integration_method)
     clean_structure(structure)
+    molecule_sets = copy.deepcopy(molecule_sets)
+    resolve_idcss(structure, molecule_sets)
     E_r = 0.0
     S_r = 0.0
     vs = None

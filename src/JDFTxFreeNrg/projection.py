@@ -1,6 +1,7 @@
 
 from JDFTxFreeNrg._orthog import remove_parallel_vectors_loop, progressively_orthogonalize_vectors, orthogonalize_projector, safe_orthogonalize_projector
 from JDFTxFreeNrg._common import dagger, box, dot, remove_phase, _error_on_nan_in_array, _error_on_nan_in_list_of_vectors
+import copy
 import numpy as np
 from numpy.typing import NDArray
 from pymatgen.core.structure import Structure, Molecule
@@ -349,6 +350,9 @@ def _append_projectors_mol_set_rot(projectors: list[NDArray[np.float64]], modes:
     return projectors
 
 def get_projector_raw(structure: Structure, molecule_sets: list[dict] | None = None) -> NDArray[np.float64]:
+    # Resolving indices/axes mutates the dicts, so work on a copy to keep the caller's specs
+    # (e.g. "all", atom-pair axes) unresolved for reuse on other structures
+    molecule_sets = copy.deepcopy(molecule_sets)
     try:
         return _get_projector_raw(structure, molecule_sets=molecule_sets)
     except Exception as e:

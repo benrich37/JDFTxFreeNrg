@@ -1,6 +1,7 @@
-from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs, resolve_axes
+from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs, resolve_axes, get_projector
 from JDFTxFreeNrg.testing import gen_random_structure
 from typing import Any
+import copy
 import numpy as np
 import pytest
 
@@ -153,3 +154,18 @@ def test_resolve_axes():
     for i, ax in enumerate(axes):
         assert ax.ndim == 1, f"Resolved axis {i} is not 1D (ndim {ax.ndim})"
         assert isinstance(ax, np.ndarray), f"Resolved axis {i} is not a numpy array (type {type(ax)})"
+
+def test_get_projector_does_not_mutate_molecule_sets():
+    molecule_sets = [
+        {"indices": "all", "trans": True, "rot": False},
+        {"indices": [0, 1, 2], "trans": False, "rot": True, "axes": [[0, 1], "z", {"axis": "x", "ortho": True}]},
+    ]
+    original = copy.deepcopy(molecule_sets)
+    small = gen_random_structure(4)
+    large = gen_random_structure(7)
+    get_projector(small, molecule_sets=molecule_sets)
+    assert molecule_sets == original, "get_projector modified the caller's molecule_sets"
+    # Reusing the same list on a structure with a different atom count must match a fresh list
+    P_reused = get_projector(large, molecule_sets=molecule_sets)
+    P_fresh = get_projector(large, molecule_sets=copy.deepcopy(original))
+    assert np.allclose(P_reused @ P_reused.T, P_fresh @ P_fresh.T), "Reused molecule_sets gave a different projector"
