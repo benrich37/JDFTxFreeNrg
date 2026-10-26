@@ -1,7 +1,8 @@
-from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs, resolve_axes, get_projector
+from JDFTxFreeNrg.projection import gen_ortho_axes_R3, project_out_vector_from_vector, resolve_axis, ref_axs, resolve_axes, get_projector, get_rotation_vector, get_center_of_mass, resolve_center
 from JDFTxFreeNrg.testing import gen_random_structure
 from typing import Any
 import copy
+from pymatgen.core.structure import Structure
 import numpy as np
 import pytest
 
@@ -169,3 +170,114 @@ def test_get_projector_does_not_mutate_molecule_sets():
     P_reused = get_projector(large, molecule_sets=molecule_sets)
     P_fresh = get_projector(large, molecule_sets=copy.deepcopy(original))
     assert np.allclose(P_reused @ P_reused.T, P_fresh @ P_fresh.T), "Reused molecule_sets gave a different projector"
+
+
+def _rigid_rotation_residuals(structure, idcs: list[int], P: np.ndarray) -> list[float]:
+    # Norm of each true rigid rotation of atoms idcs (about their COM) left outside the projector P
+    sub = Structure.from_sites([structure[i] for i in sorted(set(idcs))])
+    com = get_center_of_mass(sub)
+    residuals = []
+    for ax in np.eye(3):
+        d = np.zeros((len(structure), 3))
+        for i in set(idcs):
+            d[i] = np.cross(ax, structure.cart_coords[i] - com)
+        d = d.flatten() / np.linalg.norm(d)
+        residuals.append(np.linalg.norm(d - P @ (P.T @ d)))
+    return residuals
+
+
+@pytest.mark.parametrize(
+        ("idcs"),
+        [
+            [1, 3, 4],
+            [4, 1, 3],
+            [3, 4, 1],
+            [5, 0, 2, 4],
+            [4, 1, 3, 1],
+        ]
+)
+def test_rotation_projector_index_order(idcs: list[int]):
+    structure = gen_random_structure(6)
+    P = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True}])
+    P_sorted = get_projector(structure, molecule_sets=[{"indices": sorted(set(idcs)), "rot": True}])
+    assert np.allclose(P @ P.T, P_sorted @ P_sorted.T), f"Rotation projector depends on index order for {idcs}"
+    residuals = _rigid_rotation_residuals(structure, idcs, P)
+    assert np.allclose(residuals, 0.0, atol=1e-8), f"Rigid rotations of {idcs} not captured by projector (residuals {residuals})"
+
+
+def test_get_rotation_vector_subset():
+    structure = gen_random_structure(6)
+    idcs = [4, 1, 3]
+    P = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True, "axes": ["x", "y", "z"]}])
+    for ax in ref_axs.values():
+        vec = get_rotation_vector(ax, structure, mol_indices=idcs)
+        vec = vec / np.linalg.norm(vec)
+        assert np.isclose(np.linalg.norm(vec - P @ (P.T @ vec)), 0.0, atol=1e-8), "get_rotation_vector is not a rigid rotation of the subset"
+        assert np.allclose(vec.reshape(-1, 3)[[0, 2, 5]], 0.0), "get_rotation_vector moved atoms outside the subset"
+
+
+def _rotation_residuals_about_point(structure, idcs: list[int], point: np.ndarray, P: np.ndarray) -> list[float]:
+    # Norm of each rigid rotation of atoms idcs about point left outside the projector P
+    residuals = []
+    for ax in np.eye(3):
+        d = np.zeros((len(structure), 3))
+        for i in set(idcs):
+            d[i] = np.cross(ax, structure.cart_coords[i] - point)
+        d = d.flatten() / np.linalg.norm(d)
+        residuals.append(np.linalg.norm(d - P @ (P.T @ d)))
+    return residuals
+
+
+@pytest.mark.parametrize(
+        ("center", "expected_idcs"),
+        [
+            (3, [3]),
+            (np.int64(4), [4]),
+            ([1, 4], [1, 4]),
+            ([0, 5], [0, 5]),  # atoms outside the rotating set are allowed as a center
+        ]
+)
+def test_rotation_projector_center_indices(center, expected_idcs: list[int]):
+    structure = gen_random_structure(6)
+    idcs = [1, 3, 4]
+    point = np.mean(structure.cart_coords[expected_idcs], axis=0)
+    P = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True, "center": center, "axes": ["x", "y", "z"]}])
+    P_coords = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True, "center": point, "axes": ["x", "y", "z"]}])
+    assert np.allclose(P @ P.T, P_coords @ P_coords.T), f"Center {center} does not match explicit coordinates {point}"
+    residuals = _rotation_residuals_about_point(structure, idcs, point, P)
+    assert np.allclose(residuals, 0.0, atol=1e-8), f"Rotations about center {center} not captured (residuals {residuals})"
+
+
+@pytest.mark.parametrize(
+        ("center", "expected"),
+        [
+            (None, None),
+            ([], None),
+            ([0.0, 0.0, 1.5], np.array([0.0, 0.0, 1.5])),
+            ([0, 0, 1.5], np.array([0.0, 0.0, 1.5])),
+            ((1.0, 2.0, 3.0), np.array([1.0, 2.0, 3.0])),
+            (np.array([1.0, 2.0, 3.0]), np.array([1.0, 2.0, 3.0])),
+        ]
+)
+def test_resolve_center_coordinates(center, expected):
+    structure = gen_random_structure(4)
+    resolved = resolve_center(structure, center)
+    if expected is None:
+        assert resolved is None
+    else:
+        assert np.allclose(resolved, expected)
+
+
+@pytest.mark.parametrize(
+        ("center", "exception"),
+        [
+            ("com", TypeError),
+            (1.5, TypeError),
+            ([1.0, 2.0], ValueError),
+            (np.zeros((3, 1)), ValueError),
+        ]
+)
+def test_resolve_center_invalid(center, exception):
+    structure = gen_random_structure(4)
+    with pytest.raises(exception):
+        resolve_center(structure, center)

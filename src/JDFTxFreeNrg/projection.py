@@ -113,14 +113,18 @@ def get_rotation_vector(axis: NDArray[np.float64], structure: Structure, mol_ind
     if mol_indices is None:
         mol_indices = list(range(len(structure.sites)))
     modes = get_modes(structure)
-    CMcoords = get_CMcoords(structure)
+    mol_structure = Structure.from_sites([structure[i] for i in sorted(set(mol_indices))])
+    CMcoords = get_CMcoords(mol_structure)
     return _get_rotation_vector(axis, modes, CMcoords, mol_indices)
 
 def _get_rotation_vector(axis: NDArray[np.float64], modes: list[Mode], CMcoords: NDArray[np.float64], mol_indices: list[int]) -> NDArray[np.float64]:
+    # CMcoords rows follow the molecule's substructure, whose sites are in ascending atom index order
+    # regardless of the order of mol_indices
+    row_of_atom = {iAtom: row for row, iAtom in enumerate(sorted(set(mol_indices)))}
     vec = np.zeros(len(modes))
     for i, mode in enumerate(modes):
-        if mode.iAtom in mol_indices:
-            vec[i] = box(modes[i].n, axis.T, CMcoords[mol_indices.index(modes[i].iAtom)])
+        if mode.iAtom in row_of_atom:
+            vec[i] = box(mode.n, axis.T, CMcoords[row_of_atom[mode.iAtom]])
     return vec
 
 
@@ -131,6 +135,8 @@ def get_rotations_molecule(
         ) -> list[NDArray[np.float64]]:
     if center is None:
         center = get_center_of_mass(molecule_structure)
+    elif np.shape(center) != (3,):
+        raise TypeError(f"center must be Cartesian coordinates of shape (3,) (use resolve_center for atom indices), got {center}")
     CMcoords = get_centered_coords(molecule_structure, center)
     if axes is None:
         axes = []
@@ -184,24 +190,27 @@ def gen_ortho_axes_R3(axis: NDArray[np.float64]) -> list[NDArray[np.float64]]:
     return [v1, v2]
 
 def resolve_center(structure: Structure, center: int | list[int] | NDArray[np.float64] | None) -> NDArray[np.float64] | None:
-    # if isinstance(center, NDArray):
-    #     return center
-    if isinstance(center, np.ndarray): # argument 2 cannot be a parameterized generic
-            return center
-    elif isinstance(center, int):
-        return structure.cart_coords[center]
-    elif isinstance(center, list):
+    """ Resolve a center spec to Cartesian coordinates (Å).
+
+    An int is an atom index, a list of ints is the (unweighted) mean position of those atoms, and a
+    length-3 list/tuple/array of floats is taken as coordinates. Atom indices refer to `structure`.
+    None or an empty list returns None (callers then default to the center of mass).
+    """
+    if center is None:
+        return None
+    if isinstance(center, (int, np.integer)) and not isinstance(center, bool):
+        return np.array(structure.cart_coords[center], dtype=np.float64)
+    if isinstance(center, (list, tuple, np.ndarray)):
         if not len(center):
             return None
-        if isinstance(center[0], int):
+        if all(isinstance(i, (int, np.integer)) and not isinstance(i, bool) for i in center) and not isinstance(center, np.ndarray):
             coords = np.array([structure.cart_coords[i] for i in center])
             return np.mean(coords, axis=0)
-        if isinstance(center[0], float):
-            center_array = np.array(center)
-            if center_array.shape != (3,):
-                raise ValueError(f"Center numpy array must be shape (3,), got shape {center_array.shape}")
-            return center_array
-    return None
+        center_array = np.array(center, dtype=np.float64)
+        if center_array.shape != (3,):
+            raise ValueError(f"Center coordinates must be shape (3,), got shape {center_array.shape}")
+        return center_array
+    raise TypeError(f"Unexpected center type: {type(center)} ({center}). Use an atom index, a list of atom indices, or 3 coordinates.")
 
 
 def resolve_axis(structure: Structure, axis: str | list[int] | NDArray[np.float64] | dict) -> list[NDArray[np.float64]]:
@@ -343,7 +352,9 @@ def _append_projectors_mol_set_rot(projectors: list[NDArray[np.float64]], modes:
         try:
             mol_structure = structure.copy()
             mol_structure.remove_sites([i for i in range(len(structure.sites)) if i not in clean_set["indices"]])
-            projectors += get_rotations_molecule(modes, mol_structure, clean_set["indices"], center=clean_set["center"], axes=clean_set["axes"], ortho=clean_set["ortho"])
+            # Resolve against the full structure, since center atom indices refer to it
+            center = resolve_center(structure, clean_set["center"])
+            projectors += get_rotations_molecule(modes, mol_structure, clean_set["indices"], center=center, axes=clean_set["axes"], ortho=clean_set["ortho"])
         except Exception as e:
             print(f"Error in getting rotation projectors for molecule set: {clean_set}")
             raise e
