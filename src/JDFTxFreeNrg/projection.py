@@ -183,8 +183,10 @@ def gen_ortho_axes_R3(axis: NDArray[np.float64]) -> list[NDArray[np.float64]]:
     return [v1, v2]
 
 def resolve_center(structure: Structure, center: int | list[int] | NDArray[np.float64] | None) -> NDArray[np.float64] | None:
-    if isinstance(center, NDArray):
-        return center
+    # if isinstance(center, NDArray):
+    #     return center
+    if isinstance(center, np.ndarray): # argument 2 cannot be a parameterized generic
+            return center
     elif isinstance(center, int):
         return structure.cart_coords[center]
     elif isinstance(center, list):
