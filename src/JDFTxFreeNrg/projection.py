@@ -140,7 +140,7 @@ def get_rotations_molecule(
     CMcoords = get_centered_coords(molecule_structure, center)
     if axes is None:
         axes = []
-        InertiaTensor = get_inertia_tensor(molecule_structure)
+        InertiaTensor = get_inertia_tensor(molecule_structure, center=center)
         Ieigs, Ievecs = np.linalg.eigh(InertiaTensor)
         for j in range(3):
             if Ieigs[j] > symmThreshold:

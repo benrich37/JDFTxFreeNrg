@@ -281,3 +281,18 @@ def test_resolve_center_invalid(center, exception):
     structure = gen_random_structure(4)
     with pytest.raises(exception):
         resolve_center(structure, center)
+
+
+def test_rotation_projector_linear_molecule_off_axis_center():
+    # Rotating a linear molecule about a point off its axis is a real motion about all 3 axes,
+    # so the default (inertia-tensor) axes must be taken about the given center, not the COM
+    coords = [[1.0, 1.0, 1.0], [2.0, 1.0, 1.0], [3.0, 1.0, 1.0], [2.0, 3.0, 1.0]]
+    structure = Structure(np.eye(3) * 10., ["H", "H", "H", "H"], coords, coords_are_cartesian=True)
+    idcs = [0, 1, 2]
+    P = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True, "center": 3}])
+    assert P.shape[1] == 3, f"Expected 3 rotations about an off-axis center, got {P.shape[1]}"
+    residuals = _rotation_residuals_about_point(structure, idcs, structure.cart_coords[3], P)
+    assert np.allclose(residuals, 0.0, atol=1e-8), f"Rotations about off-axis center not captured (residuals {residuals})"
+    # About the COM, a linear molecule has only 2 rotations
+    P_com = get_projector(structure, molecule_sets=[{"indices": idcs, "rot": True}])
+    assert P_com.shape[1] == 2, f"Expected 2 rotations about the COM of a linear molecule, got {P_com.shape[1]}"
