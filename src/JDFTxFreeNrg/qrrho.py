@@ -93,7 +93,7 @@ def get_rr_vib_entropies(freq: float, T: float = 300) -> float:
         float: Rigid rotor entropy in K (mulitply by k to get J)
     """
     vt_over_t = (freq * freq_to_vt) / T
-    return 0.5*(1+np.log(_rr_vib_entrop_conv12 / vt_over_t))
+    return 0.5*(1+np.log(_rr_vib_entrop_conv12 * freq_to_vt / vt_over_t))
 
 def _get_rr_vib_entropies(vt_over_t: float) -> float:
     """ Returns the rigid rotor entropy
@@ -105,7 +105,7 @@ def _get_rr_vib_entropies(vt_over_t: float) -> float:
     Returns:
         float: Rigid rotor entropy in K (mulitply by k to get J)
     """
-    return 0.5*(1+np.log(_rr_vib_entrop_conv12 / vt_over_t))
+    return 0.5*(1+np.log(_rr_vib_entrop_conv12 * freq_to_vt / vt_over_t))
 
 """
 MISC

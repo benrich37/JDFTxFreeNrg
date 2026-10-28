@@ -1,6 +1,6 @@
 import pytest
-from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies
-from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, k_ev
+from JDFTxFreeNrg.qrrho import get_qrrho_vib_entropies, get_qrrho_vib_enthalpies, get_rr_vib_entropies
+from JDFTxFreeNrg.standard import get_enthalpy_vib, get_entropy_vib, get_entropies_vib, k_ev
 from JDFTxFreeNrg.testing import gen_random_structure
 from JDFTxFreeNrg.hessian import (
     pert_along_vec, pert_along_vib_mode, get_imaginary_mode_idcs, _pert_along_im_freqs_helper, solve_vib_modes, get_freqs, pert_along_im_freqs,
@@ -172,3 +172,41 @@ def test_get_imaginary_mode_idcs(zero_thresh: float, n_freqs: int, target_imag_i
 
 
 
+
+
+def _grimme_rr_entropy(freq_cm: float, T: float) -> float:
+    # Grimme 2012 rigid rotor entropy in SI, from nu in s^-1 (independent of qrrho.py's vibrational-temperature route)
+    # (without the B_av cap on mu, which qrrho.py does not apply)
+    from scipy import constants as const
+    nu = freq_cm * const.c * 100
+    mu = const.h / (8 * np.pi**2 * nu)
+    return 0.5 + np.log(np.sqrt(8 * np.pi**3 * mu * const.k * T / const.h**2))
+
+
+@pytest.mark.parametrize(
+        ("freq", "T"),
+        [
+            (1.0, 300.0),
+            (10.0, 298.15),
+            (50.0, 298.15),
+            (100.0, 150.0),
+            (300.0, 600.0),
+        ]
+)
+def test_rr_vib_entropy_matches_grimme(freq: float, T: float):
+    assert pytest.approx(get_rr_vib_entropies(freq, T), rel=1e-10) == _grimme_rr_entropy(freq, T)
+
+
+@pytest.mark.parametrize(
+        ("freqs", "T", "freq0"),
+        [
+            (np.array([5.0, 50.0, 100.0, 400.0, 1600.0]), 298.15, 100.0),
+            (np.array([20.0, 80.0, 250.0]), 400.0, 50.0),
+        ]
+)
+def test_qrrho_vib_entropy_matches_grimme(freqs: np.ndarray, T: float, freq0: float):
+    w = 1 / (1 + (freq0 / freqs)**4)
+    S_ho = get_entropies_vib(freqs, T) / k_ev
+    S_rr = np.array([_grimme_rr_entropy(f, T) for f in freqs])
+    expected = (w * S_ho + (1 - w) * S_rr) * k_ev
+    assert np.allclose(get_qrrho_vib_entropies(freqs, T, freq0=freq0, alpha=4), expected, rtol=1e-10)
